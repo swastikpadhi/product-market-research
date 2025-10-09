@@ -1,0 +1,46 @@
+# Multi-Agent Market Research System - Python Dependencies
+# LangGraph + Tavily powered multi-agent orchestration
+
+# Core AI/ML Framework
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-community>=0.3.0
+langchain-core>=0.3.0
+
+# Web Search & Data
+tavily-python>=0.3.0
+
+# Web Framework
+fastapi>=0.115.0
+uvicorn>=0.32.0
+pydantic>=2.9.0
+
+# Database
+# PostgreSQL (primary for structured data)
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+alembic>=1.12.0
+
+# MongoDB (for unstructured research results)
+pymongo>=4.9,<4.10
+motor>=3.6.0
+
+# Redis (for caching and Celery broker)
+redis>=5.1.0
+
+# Task Queue
+celery>=5.4.0
+celery[redis]>=5.4.0
+flower>=2.0.1  # Celery monitoring dashboard (optional)
+
+# Data Processing & Extraction
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+requests>=2.31.0
+aiohttp>=3.9.0
+
+# Utilities
+python-dotenv>=1.0.0
+watchdog>=3.0.0
+typing-extensions>=4.8.0

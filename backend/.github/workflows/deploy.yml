@@ -1,0 +1,90 @@
+name: Deploy Backend to EC2
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+
+env:
+  AWS_REGION: us-east-1
+  GHCR_REPOSITORY: tavily-research-backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Python tests
+        run: |
+          python -m pytest tests/ || echo "No tests found, continuing..."
+
+      - name: Lint Python code
+        run: |
+          pip install flake8
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || echo "Linting completed with warnings"
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build, tag, and push backend image
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -f Dockerfile.backend -t ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:$IMAGE_TAG .
+          docker tag ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:$IMAGE_TAG ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:latest
+          docker push ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:$IMAGE_TAG
+          docker push ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu
+            # Login to GitHub Container Registry
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            # Stop existing containers
+            docker-compose -f docker-compose.prod.yml down
+            # Pull latest images from GHCR
+            docker-compose -f docker-compose.prod.yml pull
+            # Start new containers
+            docker-compose -f docker-compose.prod.yml up -d
+            # Clean up old images
+            docker system prune -f

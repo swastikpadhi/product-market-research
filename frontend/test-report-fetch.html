@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Report Fetch</title>
+</head>
+<body>
+    <h1>Testing Report Fetch</h1>
+    <button onclick="testReportFetch()">Test Report Fetch</button>
+    <div id="result"></div>
+
+    <script>
+        async function testReportFetch() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                // Test the API endpoint that the frontend calls
+                const response = await fetch('http://localhost:8000/api/v1/research/result/research_20251008_030359_1367');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <h3>✅ API Call Successful!</h3>
+                        <p><strong>Status:</strong> ${response.status}</p>
+                        <p><strong>Request ID:</strong> ${data.request_id}</p>
+                        <p><strong>Task Status:</strong> ${data.status}</p>
+                        <p><strong>Has Result:</strong> ${data.result ? 'Yes' : 'No'}</p>
+                        <p><strong>Has Final Report:</strong> ${data.result?.final_report ? 'Yes' : 'No'}</p>
+                        <details>
+                            <summary>Full Response</summary>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </details>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<h3>❌ API Call Failed</h3><p>Status: ${response.status}</p><p>Error: ${await response.text()}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<h3>❌ Network Error</h3><p>${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

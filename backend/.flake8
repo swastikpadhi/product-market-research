@@ -1,0 +1,6 @@
+[flake8]
+# Relaxed flake8 configuration - focus on critical errors only
+max-line-length = 120
+ignore = W291,W293,E226,E261,E302,E305,E701,E712,F401,F541,F841
+select = E9,F63,F7,F82
+exclude = .git,__pycache__,.pytest_cache,venv,env,migrations/
