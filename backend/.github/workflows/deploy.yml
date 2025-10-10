@@ -12,7 +12,7 @@ on:
 
 env:
   AWS_REGION: eu-north-1
-  GHCR_REPOSITORY: tavily-research-backend
+  GHCR_REPOSITORY: product-market-research
 
 jobs:
   test:
