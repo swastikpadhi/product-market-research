@@ -29,16 +29,24 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          cd frontend
+          npm ci
 
       - name: Run tests
-        run: npm test -- --coverage --watchAll=false || echo "No tests found, continuing..."
+        run: |
+          cd frontend
+          npm test -- --coverage --watchAll=false || echo "No tests found, continuing..."
 
       - name: Lint code
-        run: npm run lint || echo "Linting completed with warnings"
+        run: |
+          cd frontend
+          npm run lint || echo "Linting completed with warnings"
 
       - name: Build application
-        run: npm run build
+        run: |
+          cd frontend
+          npm run build
         env:
           REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
 
@@ -58,10 +66,14 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          cd frontend
+          npm ci
 
       - name: Build application
-        run: npm run build
+        run: |
+          cd frontend
+          npm run build
         env:
           REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
 
@@ -74,6 +86,7 @@ jobs:
 
       - name: Deploy to S3
         run: |
+          cd frontend
           aws s3 sync build/ s3://${{ env.S3_BUCKET }} --delete
           aws s3 cp build/index.html s3://${{ env.S3_BUCKET }}/index.html --cache-control "no-cache, no-store, must-revalidate"
           aws s3 cp build/error.html s3://${{ env.S3_BUCKET }}/error.html --cache-control "no-cache, no-store, must-revalidate"
