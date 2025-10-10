@@ -76,9 +76,9 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "build/*"
+          source: "frontend/build/*"
           target: "/var/www/frontend/"
-          strip_components: 1
+          strip_components: 2
 
 
       - name: Deploy status
