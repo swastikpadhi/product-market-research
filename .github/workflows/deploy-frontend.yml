@@ -18,6 +18,9 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,24 +32,16 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          cd frontend
-          npm ci
+        run: npm ci
 
       - name: Run tests
-        run: |
-          cd frontend
-          npm test -- --coverage --watchAll=false || echo "No tests found, continuing..."
+        run: npm test -- --coverage --watchAll=false || echo "No tests found, continuing..."
 
       - name: Lint code
-        run: |
-          cd frontend
-          npm run lint || echo "Linting completed with warnings"
+        run: npm run lint || echo "Linting completed with warnings"
 
       - name: Build application
-        run: |
-          cd frontend
-          npm run build
+        run: npm run build
         env:
           REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
 
@@ -54,6 +49,9 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: ./frontend
     
     steps:
       - name: Checkout code
@@ -66,14 +64,10 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          cd frontend
-          npm ci
+        run: npm ci
 
       - name: Build application
-        run: |
-          cd frontend
-          npm run build
+        run: npm run build
         env:
           REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
 
@@ -86,7 +80,6 @@ jobs:
 
       - name: Deploy to S3
         run: |
-          cd frontend
           aws s3 sync build/ s3://${{ env.S3_BUCKET }} --delete
           aws s3 cp build/index.html s3://${{ env.S3_BUCKET }}/index.html --cache-control "no-cache, no-store, must-revalidate"
           aws s3 cp build/error.html s3://${{ env.S3_BUCKET }}/error.html --cache-control "no-cache, no-store, must-revalidate"

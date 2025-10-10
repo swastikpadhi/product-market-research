@@ -17,6 +17,9 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,18 +30,13 @@ jobs:
           python-version: '3.11'
 
       - name: Install Python dependencies
-        run: |
-          cd backend
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Run Python tests
-        run: |
-          cd backend
-          python -m pytest tests/ || echo "No tests found, continuing..."
+        run: python -m pytest tests/ || echo "No tests found, continuing..."
 
       - name: Lint Python code
         run: |
-          cd backend
           pip install flake8
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || echo "Linting completed with warnings"
 
@@ -62,8 +60,7 @@ jobs:
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          cd backend
-          docker build -f Dockerfile.backend -t ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:$IMAGE_TAG .
+          docker build -f backend/Dockerfile.backend -t ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:$IMAGE_TAG backend/
           docker tag ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:$IMAGE_TAG ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:latest
           docker push ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:$IMAGE_TAG
           docker push ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:latest
