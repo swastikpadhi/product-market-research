@@ -44,7 +44,10 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    
+    defaults:
+      run:
+        working-directory: ./backend
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -60,7 +63,7 @@ jobs:
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -f backend/Dockerfile.backend -t ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:$IMAGE_TAG backend/
+          docker build -f Dockerfile.backend -t ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:$IMAGE_TAG .
           docker tag ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:$IMAGE_TAG ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:latest
           docker push ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:$IMAGE_TAG
           docker push ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:latest
