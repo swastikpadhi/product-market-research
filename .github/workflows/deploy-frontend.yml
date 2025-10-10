@@ -11,8 +11,8 @@ on:
       - 'frontend/**'
 
 env:
-  AWS_REGION: us-east-1
-  S3_BUCKET: tavily-research-frontend
+  AWS_REGION: eu-north-1
+  S3_BUCKET: product-market-research
   CLOUDFRONT_DISTRIBUTION_ID: E1234567890ABC
 
 jobs:
