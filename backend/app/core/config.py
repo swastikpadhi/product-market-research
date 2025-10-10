@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     tavily_api_key: str = ""
     
     # Database URLs
-    postgres_database_url: str = ""
-    mongodb_uri: str = ""
+    postgres_url: str = ""
+    mongodb_url: str = ""
     redis_url: str = ""
     
     # API Configuration
@@ -26,9 +26,9 @@ class Settings(BaseSettings):
     celery_result_backend: str = ""
     
     # Logging Configuration
-    log_file: str = "backend_server.log"
-    celery_log_file: str = "celery_worker.log"
-    log_level: str = "INFO"
+    log_file: str = ""
+    celery_log_file: str = ""
+    log_level: str = ""
     
     class Config:
         env_file = ".env"
@@ -83,10 +83,10 @@ def get_logger(name: str) -> logging.Logger:
 
 # Convenience functions for backward compatibility
 def get_database_url() -> str:
-    return settings.postgres_database_url
+    return settings.postgres_url
 
 def get_mongodb_url() -> str:
-    return settings.mongodb_uri
+    return settings.mongodb_url
 
 def get_redis_url() -> str:
     return settings.redis_url

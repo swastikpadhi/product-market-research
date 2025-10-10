@@ -46,10 +46,10 @@ class ServiceManager:
     
     async def _initialize_postgres(self):
         """Initialize PostgreSQL database"""
-        if not settings.postgres_database_url:
-            raise ValueError("POSTGRES_DATABASE_URL is required")
+        if not settings.postgres_url:
+            raise ValueError("POSTGRES_URL is required")
         
-        postgres_manager.connect(settings.postgres_database_url)
+        postgres_manager.connect(settings.postgres_url)
         if not postgres_manager.is_connected:
             raise RuntimeError("Failed to connect to PostgreSQL")
         
@@ -66,10 +66,10 @@ class ServiceManager:
     
     async def _initialize_mongodb(self):
         """Initialize MongoDB connection"""
-        if not settings.mongodb_uri:
-            raise ValueError("MONGODB_URI is required")
+        if not settings.mongodb_url:
+            raise ValueError("MONGODB_URL is required")
         
-        success = await mongodb_manager.connect(settings.mongodb_uri)
+        success = await mongodb_manager.connect(settings.mongodb_url)
         if not success:
             raise RuntimeError("Failed to connect to MongoDB")
         

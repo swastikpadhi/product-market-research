@@ -5,7 +5,7 @@ from app.core.config import settings
 celery_app = Celery(
     'research_worker',
     broker=settings.redis_url,  # Use Redis for broker
-    backend=f"database+{settings.postgres_database_url}",  # Use PostgreSQL for result backend
+    backend=f"database+{settings.postgres_url}",  # Use PostgreSQL for result backend
     include=['app.worker.tasks']
 )
 

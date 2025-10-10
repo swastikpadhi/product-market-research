@@ -16,10 +16,10 @@ async def initialize_worker_services():
         from app.core.config import settings
         
         # Initialize MongoDB
-        await mongodb_manager.connect(settings.mongodb_uri)
+        await mongodb_manager.connect(settings.mongodb_url)
         
         # Initialize PostgreSQL
-        postgres_manager.connect(settings.postgres_database_url)
+        postgres_manager.connect(settings.postgres_url)
         
         # Initialize Redis
         await redis_manager.connect(settings.redis_url)

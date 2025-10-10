@@ -38,23 +38,3 @@ class CreditTransaction(Base):
     def __repr__(self):
         return f"<CreditTransaction(transaction_id='{self.transaction_id}', amount={self.amount})>"
 
-class ResearchStats(Base):
-    __tablename__ = "research_stats"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, nullable=False, index=True)
-    total_researches_this_month = Column(Integer, default=0)
-    total_used_this_month = Column(Float, default=0.0)
-    average_credits_per_research = Column(Float, default=0.0)
-    month_year = Column(String, nullable=False)
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
-    
-    def __repr__(self):
-        return (f"<ResearchStats(user_id='{self.user_id}', month='{self.month_year}', "
-                f"total_researches={self.total_researches_this_month})>")
-    
-    @property
-    def average_credits_per_research_calculated(self):
-        return ((self.total_used_this_month / self.total_researches_this_month) 
-                if self.total_researches_this_month > 0 else 0)
