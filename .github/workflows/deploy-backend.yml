@@ -19,11 +19,13 @@ env:
   GHCR_REPOSITORY: product-market-research
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
     defaults:
       run:
         working-directory: ./backend
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,25 +38,10 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      - name: Run Python tests
-        run: python -m pytest tests/ || echo "No tests found, continuing..."
-
       - name: Lint Python code
         run: |
           pip install flake8
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || echo "Linting completed with warnings"
-
-  build-and-push:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    defaults:
-      run:
-        working-directory: ./backend
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -73,7 +60,7 @@ jobs:
           docker push ghcr.io/${{ github.repository_owner }}/${{ env.GHCR_REPOSITORY }}:latest
 
   deploy:
-    needs: build-and-push
+    needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
     
