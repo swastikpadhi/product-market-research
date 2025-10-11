@@ -1,11 +1,25 @@
 from celery import Celery
 from app.core.config import settings
 
+# Convert async PostgreSQL URL to sync URL for Celery
+def get_sync_postgres_url():
+    """Convert async PostgreSQL URL to sync URL for Celery"""
+    if settings.postgres_url.startswith('postgresql+asyncpg://'):
+        # Convert async URL to sync URL
+        sync_url = settings.postgres_url.replace('postgresql+asyncpg://', 'postgresql://')
+        
+        # Convert ssl=require to sslmode=require for psycopg2 compatibility
+        if 'ssl=require' in sync_url:
+            sync_url = sync_url.replace('ssl=require', 'sslmode=require')
+        
+        return sync_url
+    return settings.postgres_url
+
 # Use centralized configuration for broker and results backend
 celery_app = Celery(
     'research_worker',
     broker=settings.redis_url,  # Use Redis for broker
-    backend=f"database+{settings.postgres_url}",  # Use PostgreSQL for result backend
+    backend=f"database+{get_sync_postgres_url()}",  # Use sync PostgreSQL for result backend
     include=['app.worker.tasks']
 )
 
