@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   # FastAPI backend (API only)
-  api:
+  research-api:
     image: ghcr.io/${GITHUB_OWNER}/${GHCR_REPOSITORY}:latest
     container_name: research_api_prod
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1
@@ -46,7 +46,7 @@ services:
       - C_FORCE_ROOT=true  # Allow running as root (Docker container)
     restart: unless-stopped
     depends_on:
-      - api
+      - research-api
 
   # Nginx reverse proxy (API only)
   nginx:
@@ -66,7 +66,7 @@ services:
         reservations:
           memory: 16M
     depends_on:
-      - api
+      - research-api
     restart: unless-stopped
 
 networks:
