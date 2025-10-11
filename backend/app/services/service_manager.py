@@ -116,10 +116,10 @@ class ServiceManager:
         else:
             logger.info("✅ All services cleaned up successfully")
     
-    def get_health_status(self) -> Dict[str, Any]:
+    async def get_health_status(self) -> Dict[str, Any]:
         """Get health status of all services"""
         return {
-            "mongodb": self._check_mongodb(),
+            "mongodb": await self._check_mongodb(),
             "postgresql": self._check_postgresql(),
             "redis": self._check_redis(),
             "openai": "configured" if settings.openai_api_key else "not_configured",
