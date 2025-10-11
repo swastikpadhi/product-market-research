@@ -57,7 +57,18 @@ def get_logger(name: str) -> logging.Logger:
             log_file = settings.log_file
         
         # Create file handler with process-specific log file
-        file_handler = logging.FileHandler(log_file)
+        if log_file and log_file.strip():
+            # Ensure log file path is absolute or in a writable directory
+            import os
+            if not os.path.isabs(log_file):
+                # If relative path, create logs directory and use absolute path
+                logs_dir = "/app/logs"
+                os.makedirs(logs_dir, exist_ok=True)
+                log_file = os.path.join(logs_dir, log_file)
+            file_handler = logging.FileHandler(log_file)
+        else:
+            # Default to stdout if no log file specified
+            file_handler = logging.StreamHandler()
         file_handler.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
         
         # Create formatter
