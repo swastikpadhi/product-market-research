@@ -23,7 +23,7 @@ class TaskRepository:
     async def get_by_id(self, request_id: str) -> Optional[Dict[str, Any]]:
         try:
             collection = self.db.get_collection("tasks")
-            task = await collection.find_one({"request_id": request_id})
+            task = await collection.find_one({"request_id": request_id, "deleted": {"$ne": True}})
             if task:
                 task["_id"] = str(task["_id"])
             return task
@@ -51,7 +51,8 @@ class TaskRepository:
         try:
             collection = self.db.get_collection("tasks")
             
-            query = {}
+            # Always exclude deleted tasks
+            query = {"deleted": {"$ne": True}}
             if status:
                 query["status"] = status
             
