@@ -78,5 +78,5 @@ jobs:
       - name: Deploy status
         run: |
           echo "✅ Frontend deployed successfully!"
-          echo "🌐 Application URL: https://yourdomain.com"
+          echo "🌐 Application URL: http://16.170.253.235/"
           echo "📁 Files deployed to: /var/www/frontend/"
