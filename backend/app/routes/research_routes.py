@@ -6,6 +6,7 @@ from app.services.research_service import research_service
 from app.services.task_repository import task_repository
 from app.services.search_service import search_service
 from app.services.progress_tracker import progress_tracker
+from app.db.redis_manager import redis_manager
 from app.schemas.research_schemas import (
     ResearchRequest, ResearchResponse, ResearchStatus, ResearchResult,
     SearchesRemaining, TaskList, TaskReport, TaskAction, CreditAddition
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 research_router = APIRouter()
 
-@research_router.post("/", response_model=ResearchResponse)
+@research_router.post("", response_model=ResearchResponse)
 async def submit_market_research(
     request: ResearchRequest,
     user_id: str = "default"
@@ -71,7 +72,7 @@ async def get_research_result(request_id: str) -> ResearchResult:
         logger.error(f"Error getting research result: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get research result: {str(e)}")
 
-@research_router.get("/")
+@research_router.get("")
 async def get_tasks(
     page: int = 1,
     page_size: int = 5,
@@ -100,8 +101,23 @@ async def get_tasks(
 
 @research_router.get("/searches-remaining")
 async def get_searches_remaining(user_id: str = "default") -> Dict[str, Any]:
-    """Get remaining searches count based on credit balance."""
+    """Get remaining searches count based on credit balance with caching."""
     try:
+        # Try to get from Redis cache first (5 minute cache)
+        cache_key = f"searches_remaining:{user_id}"
+        redis_client = redis_manager.get_client()
+        
+        if redis_client:
+            try:
+                cached_data = await redis_client.get(cache_key)
+                if cached_data:
+                    import json
+                    cached_result = json.loads(cached_data)
+                    logger.info(f"Returning cached searches remaining for {user_id}")
+                    return cached_result
+            except Exception as e:
+                logger.warning(f"Redis cache read failed: {e}")
+        
         from app.services.credit_service import CreditService
         
         # Get credit service instance
@@ -128,11 +144,22 @@ async def get_searches_remaining(user_id: str = "default") -> Dict[str, Any]:
         for depth, cost in estimated_costs.items():
             searches_remaining[depth] = int(account.current_balance / cost) if account else 0
         
-        return {
+        result = {
             "searches_remaining": searches_remaining,
             "credit_balance": account.current_balance if account else 0,
             "user_id": user_id
         }
+        
+        # Cache the result for 5 minutes
+        if redis_client:
+            try:
+                import json
+                await redis_client.setex(cache_key, 300, json.dumps(result))  # 5 minutes
+                logger.info(f"Cached searches remaining for {user_id}")
+            except Exception as e:
+                logger.warning(f"Redis cache write failed: {e}")
+        
+        return result
     except Exception as e:
         logger.error(f"Error getting searches remaining: {e}")
         raise HTTPException(status_code=500, detail="Failed to get searches remaining")

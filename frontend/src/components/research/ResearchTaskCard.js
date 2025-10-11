@@ -90,6 +90,12 @@ export default function ResearchTaskCard({
                   </span>
                 )}
               </div>
+              {/* Show timestamp for duplicate tasks */}
+              {(task.started_at || task.created_at) && (
+                <div className="text-xs text-gray-500 mt-1">
+                  Created: {new Date(task.started_at || task.created_at).toLocaleString()}
+                </div>
+              )}
             </div>
           </div>
           

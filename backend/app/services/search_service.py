@@ -26,10 +26,10 @@ class SearchService:
             task_data = self._prepare_task_data(task, search_text)
             
             task_key = f"{self.task_data_prefix}{request_id}"
-            redis_client.hset(task_key, mapping=task_data)
+            await redis_client.hset(task_key, mapping=task_data)
             
             score = datetime.now().timestamp()
-            redis_client.zadd(self.search_index_key, {request_id: score})
+            await redis_client.zadd(self.search_index_key, {request_id: score})
             
             return True
             
@@ -81,13 +81,13 @@ class SearchService:
             query_lower = query.lower().strip()
             results = []
             
-            task_ids = redis_client.zrevrange(self.search_index_key, 0, -1)
+            task_ids = await redis_client.zrevrange(self.search_index_key, 0, -1)
             
             for task_id in task_ids:
                 if len(results) >= limit:
                     break
                 
-                task_data = self._get_task_data(redis_client, task_id)
+                task_data = await self._get_task_data(redis_client, task_id)
                 if not task_data:
                     continue
                 
@@ -103,9 +103,9 @@ class SearchService:
             logger.error(f"Error searching tasks: {e}")
             return []
     
-    def _get_task_data(self, redis_client, task_id: str) -> Optional[Dict[str, str]]:
+    async def _get_task_data(self, redis_client, task_id: str) -> Optional[Dict[str, str]]:
         task_key = f"{self.task_data_prefix}{task_id}"
-        return redis_client.hgetall(task_key)
+        return await redis_client.hgetall(task_key)
     
     def _create_search_result(self, task_data: Dict[str, str], query: str) -> Dict[str, Any]:
         search_text = task_data.get("search_text", "")
@@ -151,10 +151,10 @@ class SearchService:
             return False
         
         try:
-            redis_client.zrem(self.search_index_key, request_id)
+            await redis_client.zrem(self.search_index_key, request_id)
             
             task_key = f"{self.task_data_prefix}{request_id}"
-            redis_client.delete(task_key)
+            await redis_client.delete(task_key)
             
             return True
             
@@ -170,25 +170,25 @@ class SearchService:
         try:
             suggestions = []
             partial_lower = partial_query.lower().strip()
-            seen_queries = set()
             
-            task_ids = redis_client.zrevrange(self.search_index_key, 0, -1)
+            # Limit the number of task IDs we fetch to improve performance
+            # Only get the most recent 50 tasks instead of all
+            task_ids = await redis_client.zrevrange(self.search_index_key, 0, 49)
             
             for task_id in task_ids:
                 if len(suggestions) >= limit:
                     break
                 
-                task_data = self._get_task_data(redis_client, task_id)
+                task_data = await self._get_task_data(redis_client, task_id)
                 if not task_data:
                     continue
                 
                 query = task_data.get("query", "")
-                if not query or query in seen_queries:
+                if not query:
                     continue
                 
                 match_type = self._get_match_type(query, partial_lower)
                 if match_type:
-                    seen_queries.add(query)
                     suggestions.append({
                         "query": query,
                         "request_id": task_data.get("request_id"),

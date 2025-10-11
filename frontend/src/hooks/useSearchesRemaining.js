@@ -29,7 +29,7 @@ export default function useSearchesRemaining() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, []); // Empty dependency array is correct here
 
   return {
     searchesRemaining,

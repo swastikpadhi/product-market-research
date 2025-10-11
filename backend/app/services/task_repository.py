@@ -13,7 +13,7 @@ class TaskRepository:
     async def create(self, task_data: Dict[str, Any]) -> bool:
         try:
             collection = self.db.get_collection("tasks")
-            result = collection.insert_one(task_data)
+            result = await collection.insert_one(task_data)
             return result.inserted_id is not None
             
         except Exception as e:
@@ -23,7 +23,7 @@ class TaskRepository:
     async def get_by_id(self, request_id: str) -> Optional[Dict[str, Any]]:
         try:
             collection = self.db.get_collection("tasks")
-            task = collection.find_one({"request_id": request_id})
+            task = await collection.find_one({"request_id": request_id})
             if task:
                 task["_id"] = str(task["_id"])
             return task
@@ -36,7 +36,7 @@ class TaskRepository:
         try:
             collection = self.db.get_collection("tasks")
             update_data["updated_at"] = datetime.now().isoformat()
-            result = collection.update_one(
+            result = await collection.update_one(
                 {"request_id": request_id},
                 {"$set": update_data}
             )
@@ -56,13 +56,13 @@ class TaskRepository:
                 query["status"] = status
             
             # Get total count for pagination
-            total_count = collection.count_documents(query)
+            total_count = await collection.count_documents(query)
             
             # Get paginated results
             cursor = collection.find(query).sort("started_at", -1).skip((page - 1) * page_size).limit(page_size)
             tasks = []
             
-            for task in cursor:
+            async for task in cursor:
                 task["_id"] = str(task["_id"])
                 tasks.append(task)
             
@@ -90,7 +90,7 @@ class TaskRepository:
     async def delete(self, request_id: str) -> bool:
         try:
             collection = self.db.get_collection("tasks")
-            result = collection.delete_one({"request_id": request_id})
+            result = await collection.delete_one({"request_id": request_id})
             return result.deleted_count > 0
             
         except Exception as e:

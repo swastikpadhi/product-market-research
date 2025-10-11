@@ -1,0 +1,8 @@
+{
+  "short_name": "Research Assistant",
+  "name": "Intelligent Research Assistant",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
+}

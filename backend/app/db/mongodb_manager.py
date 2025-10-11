@@ -1,6 +1,6 @@
 import logging
 from typing import Optional
-from pymongo import MongoClient
+from pymongo import AsyncMongoClient
 from app.core.config import get_mongodb_url, get_logger
 
 logger = get_logger(__name__)
@@ -13,7 +13,7 @@ class MongoDBManager:
     
     async def connect(self, mongodb_url: str):
         try:
-            self.client = MongoClient(
+            self.client = AsyncMongoClient(
                 mongodb_url,
                 # Connection pool configuration (optimized for free tier)
                 maxPoolSize=5,                     # Very low for free tier
@@ -29,7 +29,7 @@ class MongoDBManager:
             )
             self.database = self.client.get_default_database()
             self.is_connected = True
-            logger.info("Connected to MongoDB with connection pool")
+            logger.info("Connected to MongoDB with async connection pool")
             return True
         except Exception as e:
             logger.error(f"Failed to connect to MongoDB: {e}")
@@ -40,7 +40,7 @@ class MongoDBManager:
     
     async def close(self):
         if self.client:
-            self.client.close()
+            await self.client.close()
             self.is_connected = False
             logger.info("MongoDB connection closed")
     
@@ -49,10 +49,10 @@ class MongoDBManager:
             raise Exception("MongoDB not connected")
         return self.database[collection_name]
     
-    def ping(self) -> bool:
+    async def ping(self) -> bool:
         try:
             if self.client:
-                self.client.admin.command('ping')
+                await self.client.admin.command('ping')
                 return True
             return False
         except Exception as e:

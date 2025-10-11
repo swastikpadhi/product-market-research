@@ -206,7 +206,7 @@ class ProgressTracker:
                 return None
             
             cache_key = f"status:{request_id}"
-            cached_data = redis_client.get(cache_key)
+            cached_data = await redis_client.get(cache_key)
             
             if cached_data:
                 import json
@@ -227,7 +227,7 @@ class ProgressTracker:
             
             cache_key = f"status:{request_id}"
             import json
-            redis_client.setex(cache_key, 3600, json.dumps(status_data))
+            await redis_client.setex(cache_key, 3600, json.dumps(status_data))
             
             return True
             
@@ -243,7 +243,7 @@ class ProgressTracker:
                 return False
             
             cache_key = f"status:{request_id}"
-            redis_client.delete(cache_key)
+            await redis_client.delete(cache_key)
             
             return True
             

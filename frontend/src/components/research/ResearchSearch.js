@@ -9,6 +9,7 @@ export default function ResearchSearch({ onSearchResults, onClearSearch }) {
   const [isSearching, setIsSearching] = useState(false);
   const debounceRef = useRef(null);
   const searchRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   const searchTasks = useCallback(async (searchQuery) => {
     if (!searchQuery.trim()) {
@@ -35,14 +36,25 @@ export default function ResearchSearch({ onSearchResults, onClearSearch }) {
   }, [onSearchResults, onClearSearch]);
 
   const getSuggestions = useCallback(async (partialQuery) => {
-    if (!partialQuery.trim()) {
+    if (!partialQuery.trim() || partialQuery.trim().length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
     }
 
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new abort controller
+    abortControllerRef.current = new AbortController();
+
     try {
-      const response = await fetch(`${API_BASE}/search/suggestions?partial_query=${encodeURIComponent(partialQuery)}&limit=5`);
+          const response = await fetch(`${API_BASE}/search/suggestions?partial_query=${encodeURIComponent(partialQuery)}&limit=5`, {
+        signal: abortControllerRef.current.signal
+      });
+      
       if (response.ok) {
         const data = await response.json();
         setSuggestions(data.suggestions || []);
@@ -52,8 +64,10 @@ export default function ResearchSearch({ onSearchResults, onClearSearch }) {
         setSuggestions([]);
       }
     } catch (err) {
-      console.error('Suggestions error:', err);
-      setSuggestions([]);
+      if (err.name !== 'AbortError') {
+        console.error('Suggestions error:', err);
+        setSuggestions([]);
+      }
     }
   }, []);
 
@@ -67,7 +81,7 @@ export default function ResearchSearch({ onSearchResults, onClearSearch }) {
     }
     
     if (value.trim()) {
-      // Debounce suggestions
+      // Debounce suggestions with shorter delay for faster response
       debounceRef.current = setTimeout(() => {
         getSuggestions(value);
       }, 300);
@@ -122,11 +136,14 @@ export default function ResearchSearch({ onSearchResults, onClearSearch }) {
     };
   }, []);
 
-  // Cleanup debounce timer on unmount
+  // Cleanup debounce timer and abort controller on unmount
   useEffect(() => {
     return () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
     };
   }, []);
@@ -169,7 +186,14 @@ export default function ResearchSearch({ onSearchResults, onClearSearch }) {
                 onClick={() => handleSuggestionClick(suggestion)}
                 className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
               >
-                {suggestion.query}
+                <div className="flex flex-col">
+                  <div className="font-medium">{suggestion.query}</div>
+                  {suggestion.started_at && (
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      Created: {new Date(suggestion.started_at).toLocaleString()}
+                    </div>
+                  )}
+                </div>
               </button>
             ))}
           </div>

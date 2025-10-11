@@ -99,10 +99,6 @@ export default function useResearchTasks(appState) {
   }, [setActiveTask]);
 
   const fetchReport = useCallback(async (requestId) => {
-    if (reportData[requestId]) {
-      return reportData[requestId];
-    }
-
     setLoadingReports(prev => ({ ...prev, [requestId]: true }));
     try {
       const response = await fetch(`${API_BASE}/result/${requestId}`);
@@ -123,7 +119,7 @@ export default function useResearchTasks(appState) {
     } finally {
       setLoadingReports(prev => ({ ...prev, [requestId]: false }));
     }
-  }, [reportData]);
+  }, []); // Remove reportData dependency - let the component handle caching
 
   const deleteTask = useCallback(async (requestId) => {
     try {

@@ -1,6 +1,6 @@
 import logging
 from typing import Optional
-import redis
+import redis.asyncio as redis
 from app.core.config import get_redis_url
 
 logger = logging.getLogger(__name__)
@@ -26,9 +26,9 @@ class RedisManager:
                 encoding='utf-8',                  # Default encoding
                 retry_on_error=[redis.ConnectionError, redis.TimeoutError]  # Retry on these errors
             )
-            self.client.ping()
+            await self.client.ping()
             self.is_connected = True
-            logger.info("Connected to Redis with connection pool")
+            logger.info("Connected to Redis with async connection pool")
             return True
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
@@ -38,17 +38,17 @@ class RedisManager:
     
     async def close(self):
         if self.client:
-            self.client.close()
+            await self.client.close()
             self.is_connected = False
             logger.info("Redis connection closed")
     
     def get_client(self):
         return self.client
     
-    def ping(self) -> bool:
+    async def ping(self) -> bool:
         try:
             if self.client:
-                self.client.ping()
+                await self.client.ping()
                 return True
             return False
         except Exception as e:

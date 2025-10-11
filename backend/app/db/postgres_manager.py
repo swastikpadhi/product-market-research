@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy import text
 from app.core.config import get_database_url
 
 logger = logging.getLogger(__name__)
@@ -12,9 +12,9 @@ class PostgreSQLManager:
         self.SessionLocal = None
         self.is_connected = False
     
-    def connect(self, database_url: str):
+    async def connect(self, database_url: str):
         try:
-            self.engine = create_engine(
+            self.engine = create_async_engine(
                 database_url,
                 # Connection pool configuration (optimized for free tier)
                 pool_size=2,                     # Minimal connections for free tier
@@ -24,18 +24,22 @@ class PostgreSQLManager:
                 pool_timeout=10,                 # Shorter timeout for free tier
                 echo=False                       # Set to True for SQL query logging
             )
-            self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+            self.SessionLocal = async_sessionmaker(
+                bind=self.engine,
+                class_=AsyncSession,
+                expire_on_commit=False
+            )
             self.is_connected = True
-            logger.info("Connected to PostgreSQL with connection pool")
+            logger.info("Connected to PostgreSQL with async connection pool")
         except Exception as e:
             logger.error(f"Failed to connect to PostgreSQL: {e}")
             self.engine = None
             self.SessionLocal = None
             self.is_connected = False
     
-    def close(self):
+    async def close(self):
         if self.engine:
-            self.engine.dispose()
+            await self.engine.dispose()
             self.is_connected = False
             logger.info("PostgreSQL connection closed")
     
@@ -44,11 +48,11 @@ class PostgreSQLManager:
             raise Exception("PostgreSQL not connected")
         return self.SessionLocal()
     
-    def ping(self) -> bool:
+    async def ping(self) -> bool:
         try:
             if self.engine:
-                with self.engine.connect() as conn:
-                    conn.execute(text("SELECT 1"))
+                async with self.engine.connect() as conn:
+                    await conn.execute(text("SELECT 1"))
                 return True
             return False
         except Exception as e:

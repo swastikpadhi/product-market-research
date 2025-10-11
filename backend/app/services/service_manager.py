@@ -49,7 +49,7 @@ class ServiceManager:
         if not settings.postgres_url:
             raise ValueError("POSTGRES_URL is required")
         
-        postgres_manager.connect(settings.postgres_url)
+        await postgres_manager.connect(settings.postgres_url)
         if not postgres_manager.is_connected:
             raise RuntimeError("Failed to connect to PostgreSQL")
         

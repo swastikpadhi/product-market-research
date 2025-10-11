@@ -51,10 +51,10 @@ export default function ProductMarketFitResearch() {
 
   const { searchesRemaining: searchesRemainingData, isLoading: isLoadingSearchesData, fetchSearches } = useSearchesRemaining();
 
-  // Load tasks when component mounts
+  // Load tasks when component mounts or when dependencies change
   useEffect(() => {
     loadTasks();
-  }, [loadTasks]);
+  }, [loadTasks, currentPage, statusFilter]);
 
   // Load searches remaining when component mounts
   useEffect(() => {

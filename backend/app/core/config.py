@@ -59,10 +59,14 @@ def get_logger(name: str) -> logging.Logger:
         # Create file handler with process-specific log file
         if log_file and log_file.strip():
             # Ensure log file path is absolute or in a writable directory
-            import os
             if not os.path.isabs(log_file):
                 # If relative path, create logs directory and use absolute path
-                logs_dir = "/app/logs"
+                if os.environ.get('ENVIRONMENT') == 'development':
+                    # In development, use current working directory instead of /app
+                    logs_dir = os.path.join(os.getcwd(), "logs")
+                else:
+                    # In production, use /app/logs
+                    logs_dir = "/app/logs"
                 os.makedirs(logs_dir, exist_ok=True)
                 log_file = os.path.join(logs_dir, log_file)
             file_handler = logging.FileHandler(log_file)
