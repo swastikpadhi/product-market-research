@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import './App.css';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Brain, Target, FileText, Clock, CheckCircle, XCircle, Ban } from 'lucide-react';
 import { ResearchForm, ActiveResearchProgress } from './components/research';
