@@ -93,6 +93,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ec2-user/backend
+            # Replace placeholder port in nginx.conf with value from .env
+            PORT=$(grep '^PORT=' .env | cut -d'=' -f2)
+            sed -i "s/PLACEHOLDER_PORT/${PORT}/g" nginx.conf
             # Login to GitHub Container Registry
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             # Stop existing containers
