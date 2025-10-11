@@ -87,8 +87,8 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "backend/docker-compose.prod.yml,backend/nginx.conf"
-          target: "/home/ec2-user/"
+          source: "backend/docker-compose.prod.yml,backend/nginx.conf,backend/.env"
+          target: "/home/ec2-user/backend/"
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -97,7 +97,7 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /home/ec2-user
+            cd /home/ec2-user/backend
             # Login to GitHub Container Registry
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             # Stop existing containers
