@@ -166,8 +166,3 @@ Thumbs.db
 
 # Node modules (if any)
 node_modules/
-
-# Docker
-.dockerignore
-Dockerfile*
-docker-compose*.yml
