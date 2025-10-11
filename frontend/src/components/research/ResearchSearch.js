@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Search, X } from 'lucide-react';
-
-const API_BASE = 'http://localhost:8000/api/v1/research';
+import { API_BASE } from '../../config/api';
 
 export default function ResearchSearch({ onSearchResults, onClearSearch }) {
   const [query, setQuery] = useState('');

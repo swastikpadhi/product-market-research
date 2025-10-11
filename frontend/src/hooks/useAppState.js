@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react';
-
-const API_BASE = 'http://localhost:8000/api/v1/research';
+import { API_BASE } from '../config/api';
 
 export function useAppState() {
   // Product-Market Fit Research Form State

@@ -8,8 +8,7 @@ import useResearchTasks from './hooks/useResearchTasks';
 import useSearchesRemaining from './hooks/useSearchesRemaining';
 import { getResearchConfig } from './constants/researchConfig';
 import { exportResults } from './utils/exportUtils';
-
-const API_BASE = 'http://localhost:8000/api/v1/research';
+import { API_BASE } from './config/api';
 
 export default function ProductMarketFitResearch() {
   const appState = useAppState();

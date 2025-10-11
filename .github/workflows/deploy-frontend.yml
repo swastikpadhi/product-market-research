@@ -38,8 +38,6 @@ jobs:
 
       - name: Build application
         run: npm run build
-        env:
-          REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
 
   deploy:
     needs: build
@@ -65,8 +63,6 @@ jobs:
 
       - name: Build application
         run: npm run build
-        env:
-          REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
 
       - name: Deploy to EC2
         uses: appleboy/scp-action@v0.1.4

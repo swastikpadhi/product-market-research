@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
-
-const API_BASE = 'http://localhost:8000/api/v1/research';
+import { API_BASE } from '../config/api';
 
 export default function useSearchesRemaining() {
   const [searchesRemaining, setSearchesRemaining] = useState(null); // null = loading or unavailable
