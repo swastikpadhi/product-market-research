@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
-# This stage will be cached if requirements.txt doesn't change
+# This layer will be cached if requirements.txt doesn't change
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
@@ -22,8 +22,9 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code
-COPY . .
+# Copy application code (this layer will be rebuilt when code changes)
+COPY app/ ./app/
+COPY main.py .
 
 # Expose port
 EXPOSE 8000

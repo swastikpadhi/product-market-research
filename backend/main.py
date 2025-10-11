@@ -56,7 +56,7 @@ async def health_check():
         "service": "research_assistant_api",
         "version": "2.0.0",
         "timestamp": datetime.now().isoformat(),
-        "dependencies": await service_manager.get_health_status()
+        "dependencies": service_manager.get_health_status()
     }
     
     # Determine overall status based on dependencies
