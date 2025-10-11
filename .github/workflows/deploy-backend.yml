@@ -10,6 +10,10 @@ on:
     paths:
       - 'backend/**'
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   AWS_REGION: eu-north-1
   GHCR_REPOSITORY: product-market-research
