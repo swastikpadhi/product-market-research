@@ -88,7 +88,7 @@ export default function useResearchTasks(appState) {
     try {
       setIsSubmitting(true); // Set loading state immediately
       
-      const response = await fetch(`${API_BASE}/`, {
+      const response = await fetch(`${API_BASE}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
