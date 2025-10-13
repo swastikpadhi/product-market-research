@@ -53,17 +53,24 @@ The Product-Market Fit Research Assistant is a multi-agent AI system built on La
 - **Tailwind CSS** - Utility-first CSS framework for responsive design
 - **Custom Hooks** - State management for research tasks and progress
 - **Export Utilities** - Report download functionality
+- **Search Interface** - As-you-type suggestions and task filtering
+- **Progress Tracking** - Live updates with checkpoint visualization
+- **Credit Display** - Searches remaining counter for user awareness
 
 **API Gateway Layer:**
 - **Nginx Reverse Proxy** - Static file serving and API routing
-- **SSL/TLS Termination** - Secure communication
+- **SSL/TLS Termination** - Let's Encrypt certificates with auto-renewal
 - **Load Balancing** - Request distribution
+- **Rate Limiting** - Request throttling and abuse prevention
+- **Static File Serving** - Frontend files served directly from Nginx
 
 **Backend Services Layer:**
 - **FastAPI Application** - RESTful API with async support
 - **Celery Task Queue** - Background job processing
 - **LangGraph Supervisor** - Multi-agent orchestration
 - **Credit Management** - Usage tracking and billing
+- **Authentication** - Auth key validation and hCaptcha verification
+- **Progress Tracking** - Lightweight checkpoint system for real-time updates
 
 **AI Agent Layer:**
 - **Market Analysis Agent** - Market size, trends, and opportunities
@@ -150,16 +157,99 @@ The Product-Market Fit Research Assistant is a multi-agent AI system built on La
 - Database abstraction layer
 - Credit management system
 
-**Frontend:**
-- React SPA with real-time updates
-- Tailwind CSS for styling
-- Custom hooks for state management
-- Export functionality for detailed report sharing
+**Frontend Features:**
+- **React SPA** - Single-page application with real-time updates
+- **Search Interface** - As-you-type suggestions and task filtering
+- **Progress Tracking** - Live updates with lightweight checkpoint system
+- **Credit Display** - Searches remaining counter for user awareness
+- **Export Functionality** - Comprehensive report downloads
+- **Responsive Design** - Tailwind CSS for mobile and desktop
+
+### Frontend Search & Filtering
+
+**As-You-Type Search:**
+- Real-time search suggestions
+- Task filtering by status and date
+- Search across task content and results
+- Debounced input for performance
+
+**Task Management:**
+- Filter by research depth (Essential, Standard, Deep)
+- Sort by creation date, status, or completion time
+- Pagination for large task lists
+- Bulk operations support
+
+### Progress Tracking System
+
+**Lightweight Checkpoint Logic:**
+- **17 Checkpoints** - Granular progress tracking through research workflow
+- **Real-time Updates** - Live progress updates via Redis
+- **Status Visualization** - Visual progress indicators
+- **Error Handling** - Graceful failure and retry mechanisms
+
+**Checkpoint Categories:**
+1. **Initialization** - Request validation and setup
+2. **Query Generation** - Search query creation
+3. **Market Analysis** - Market research execution
+4. **Competitor Analysis** - Competitive landscape research
+5. **Customer Insights** - Customer analysis and personas
+6. **Report Generation** - Final report synthesis
+7. **Completion** - Results storage and cleanup
 
 **Databases:**
 - PostgreSQL: Structured data (credit transactions)
 - MongoDB: Unstructured research results
 - Redis: Caching and task queue broker
+
+### Research Depth Configuration
+
+**Essential Research (6 credits):**
+- **Duration**: ~1 minute
+- **Tavily Search Calls**: 3 calls (1 per agent: Market, Competitor, Customer)
+- **Tavily Extract Calls**: 3 calls (1 per agent)
+- **Search Depth**: "basic" - Standard web search
+- **Extract Depth**: "basic" - Basic content extraction
+- **URLs Extracted**: 5 URLs per agent (15 total)
+- **Max Sources**: 20 per search
+- **Use Case**: Quick validation and initial insights
+
+**Standard Research (12 credits):**
+- **Duration**: ~2 minutes
+- **Tavily Search Calls**: 3 calls (1 per agent: Market, Competitor, Customer)
+- **Tavily Extract Calls**: 3 calls (1 per agent)
+- **Search Depth**: "advanced" - Comprehensive web search with deeper results
+- **Extract Depth**: "advanced" - Advanced content extraction with full page content
+- **URLs Extracted**: 5 URLs per agent (15 total)
+- **Max Sources**: 20 per search
+- **Use Case**: Detailed market research with strategic insights
+
+**Deep Research (18 credits):**
+- **Duration**: ~3 minutes
+- **Tavily Search Calls**: 3 calls (1 per agent: Market, Competitor, Customer)
+- **Tavily Extract Calls**: 3 calls (1 per agent)
+- **Search Depth**: "advanced" - Comprehensive web search with deeper results
+- **Extract Depth**: "advanced" - Advanced content extraction with full page content
+- **URLs Extracted**: 10 URLs per agent (30 total)
+- **Max Sources**: 20 per search
+- **Use Case**: Enterprise-level research with extensive citations
+
+**Tavily API Usage Details:**
+
+**Search Depth Differences:**
+- **Basic Search**: Standard web search with surface-level results
+- **Advanced Search**: Comprehensive search with deeper web crawling and more relevant results
+
+**Extract Depth Differences:**
+- **Basic Extract**: Extracts main content and key information from pages
+- **Advanced Extract**: Full page content extraction including detailed text, metadata, and comprehensive information
+
+**Research Depth Comparison:**
+
+| Depth | Credits | Duration | Search Calls | Extract Calls | URLs Extracted | Search Depth | Extract Depth | Use Case |
+|-------|---------|----------|--------------|---------------|----------------|--------------|---------------|----------|
+| Essential | 6 | ~1 min | 3 | 3 | 15 | basic | basic | Quick validation |
+| Standard | 12 | ~2 min | 3 | 3 | 15 | advanced | advanced | Strategic planning |
+| Deep | 18 | ~3 min | 3 | 3 | 30 | advanced | advanced | Enterprise research |
 
 ## LangGraph Agent Architecture
 
@@ -300,43 +390,7 @@ class ResearchResponse(BaseModel):
 - Task routing and prioritization
 - Monitoring and logging
 
-### Progress Tracking
 
-**Checkpoint System:**
-- 17 predefined checkpoints
-- Real-time progress updates
-- Status persistence in Redis
-- Frontend polling for updates
-
-**Checkpoint Categories:**
-- Initialization (1 checkpoint)
-- Query Generation (1 checkpoint)
-- Market Research (4 checkpoints)
-- Competitor Research (4 checkpoints)
-- Customer Research (4 checkpoints)
-- Report Generation (2 checkpoints)
-- Final Delivery (1 checkpoint)
-
-## Credit System
-
-### Credit Management
-
-**Credit Allocation:**
-- Monthly credit limits per user
-- Usage tracking and enforcement
-- Transaction logging for audit
-- Balance updates with atomic operations
-
-**Credit Costs:**
-- Essential Research: 6 credits
-- Standard Research: 12 credits
-- Deep Research: 18 credits
-
-**Credit Operations:**
-- Account creation with initial balance
-- Credit deduction on research submission
-- Monthly reset and limit enforcement
-- Transaction history and reporting
 
 ## Frontend Architecture
 
@@ -411,29 +465,115 @@ class ResearchResponse(BaseModel):
 - Static files deployed directly to EC2 via SCP
 - Files served from EC2 via Nginx reverse proxy
 
+### Nginx Configuration
+
+**Static File Serving:**
+```nginx
+# Frontend static files
+location / {
+    root /var/www/frontend;
+    try_files $uri $uri/ /index.html;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+
+# API routing
+location /api/ {
+    proxy_pass http://api_backend;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+**Rate Limiting Configuration:**
+- **API Endpoints**: 10 requests per second with burst capacity of 20
+- **Research Endpoints**: 2 requests per second with burst capacity of 5
+- **IP-based Throttling**: Rate limits applied per client IP address
+- **Burst Handling**: Allows temporary spikes while maintaining overall limits
+- **Nodelay Policy**: Immediate rejection when limits exceeded
+
+### Report Components
+
+**Downloaded Report Structure:**
+- **Executive Summary** - High-level insights and recommendations
+- **Market Analysis** - Market size, trends, and opportunities
+- **Competitive Landscape** - Key competitors and market positioning
+- **Customer Insights** - Target audience and pain points
+- **Product-Market Fit Score** - Quantitative PMF assessment
+- **Strategic Recommendations** - Actionable next steps
+- **Citations** - Source links and references
+- **Methodology** - Research approach and data sources
+
+**Report Formats:**
+- **Markdown** - Documentation format for easy reading and sharing
+
+### Credit System & Usage Tracking
+
+**Credit Management:**
+- **Usage-based Pricing** - Credits deducted per research request
+- **Real-time Tracking** - Live credit balance updates
+- **Searches Remaining** - User-friendly credit display
+- **Credit Validation** - Pre-request credit verification
+
+**Credit Display Features:**
+- **Current Balance** - Real-time credit count
+- **Searches Remaining** - Calculated based on current balance
+- **Research Cost Preview** - Cost display before submission
+- **Usage History** - Transaction log and credit usage
+
+**Credit Calculation Logic:**
+- **Searches Remaining**: Calculated by dividing current credits by research cost
+- **Affordability Check**: Validates if user has sufficient credits before submission
+- **Cost Preview**: Displays required credits and remaining searches to user
+- **Real-time Updates**: Credit balance updated immediately after each research request
+- **Validation**: Server-side credit verification prevents insufficient balance submissions
+
 ## Security Considerations
 
 ### API Security
 
-**Authentication:**
-- API key validation
-- Rate limiting
-- Request sanitization
-- CORS configuration
+**Authentication & Bot Protection:**
+- **Auth Key Validation** - Mandatory API key verification
+- **hCaptcha Integration** - Bot protection for all research requests
+- **Request Sanitization** - Comprehensive input validation
+- **CORS Configuration** - Cross-origin request security
+
 
 **Data Protection:**
-- Input validation and sanitization
-- SQL injection prevention
-- XSS protection
-- Secure environment variable handling
+- **Input Validation** - Comprehensive sanitization
+- **SQL Injection Prevention** - Parameterized queries
+- **XSS Protection** - Output encoding and validation
+- **Secure Environment Variables** - Encrypted configuration
+
+### SSL/TLS Security
+
+**Let's Encrypt Integration:**
+- **Automated Certificates** - Free SSL certificates via Let's Encrypt
+- **Auto-Renewal** - Certbot integration for automatic certificate renewal
+- **Certificate Monitoring** - Automated renewal alerts and health checks
+- **HTTPS Enforcement** - Secure communication enforcement
+
+**Certificate Management:**
+```bash
+# Certificate installation
+certbot --nginx -d yourdomain.com
+
+# Auto-renewal setup
+crontab -e
+# Add: 0 12 * * * /usr/bin/certbot renew --quiet
+
+# Certificate status check
+certbot certificates
+```
 
 ### Infrastructure Security
 
 **Network Security:**
-- VPC configuration
-- Security group rules
-- SSL/TLS encryption
-- Database access controls
+- **VPC Configuration** - Isolated network environment
+- **Security Group Rules** - Firewall rules for service access
+- **Database Access Controls** - Restricted database connections
 
 **Application Security:**
 - Code quality checks
@@ -453,6 +593,240 @@ class ResearchResponse(BaseModel):
 - Request/response logging
 - Error tracking
 
+## Docker Compose Scaling
+
+### Zero-Downtime Scaling Strategies
+
+The production system supports horizontal scaling of services while maintaining zero downtime through rolling updates and load balancing.
+
+#### 1. API Service Scaling
+
+**Scale Up API Instances:**
+```bash
+# Scale research-api to 3 instances
+docker compose -f docker-compose.prod.yml up -d --scale research-api=3
+
+# Verify scaling
+docker compose -f docker-compose.prod.yml ps
+```
+
+**Scale Down API Instances:**
+```bash
+# Scale down to 2 instances
+docker compose -f docker-compose.prod.yml up -d --scale research-api=2
+
+# Scale down to 1 instance
+docker compose -f docker-compose.prod.yml up -d --scale research-api=1
+```
+
+#### 2. Celery Worker Scaling
+
+**Scale Up Workers:**
+```bash
+# Scale workers to 3 instances
+docker compose -f docker-compose.prod.yml up -d --scale worker=3
+
+# Monitor worker queues
+docker compose -f docker-compose.prod.yml logs -f worker
+```
+
+**Scale Down Workers:**
+```bash
+# Gracefully scale down workers
+docker compose -f docker-compose.prod.yml up -d --scale worker=2
+
+# Stop specific worker
+docker compose -f docker-compose.prod.yml stop research_worker_prod_2
+```
+
+#### 3. Rolling Updates
+
+**Update API Service:**
+```bash
+# Pull latest image
+docker compose -f docker-compose.prod.yml pull research-api
+
+# Rolling update with zero downtime
+docker compose -f docker-compose.prod.yml up -d --no-deps research-api
+
+# Verify health
+docker compose -f docker-compose.prod.yml ps
+```
+
+**Update Worker Service:**
+```bash
+# Pull latest image
+docker compose -f docker-compose.prod.yml pull worker
+
+# Rolling update
+docker compose -f docker-compose.prod.yml up -d --no-deps worker
+```
+
+### Load Balancing Configuration
+
+#### Nginx Load Balancing Setup
+
+Update `nginx.conf` for multiple API instances:
+
+```nginx
+upstream api_backend {
+    server research_api_prod_1:8000;
+    server research_api_prod_2:8000;
+    server research_api_prod_3:8000;
+}
+
+server {
+    location /api/ {
+        proxy_pass http://api_backend;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+#### Health Check Integration
+
+**API Health Monitoring:**
+```bash
+# Check API health across instances
+curl http://localhost/api/v1/health
+
+# Monitor specific instance
+curl http://localhost:8000/health
+```
+
+**Worker Health Monitoring:**
+```bash
+# Check worker status
+docker compose -f docker-compose.prod.yml exec worker celery -A app.worker.celery_app inspect active
+
+# Monitor queue lengths
+docker compose -f docker-compose.prod.yml exec worker celery -A app.worker.celery_app inspect stats
+```
+
+### Resource Management
+
+#### Memory Limits
+
+**Current Configuration:**
+- **API Service**: 200M limit, 100M reservation
+- **Worker Service**: 1.2G limit, 800M reservation  
+- **Nginx**: 32M limit, 16M reservation
+
+**Scaling Considerations:**
+```bash
+# Monitor resource usage
+docker stats
+
+# Adjust memory limits in docker-compose.prod.yml
+deploy:
+  resources:
+    limits:
+      memory: 400M  # Increase for high load
+    reservations:
+      memory: 200M
+```
+
+#### CPU Scaling
+
+**Multi-Core Utilization:**
+```bash
+# Scale workers with CPU affinity
+docker compose -f docker-compose.prod.yml up -d --scale worker=4
+
+# Monitor CPU usage
+docker compose -f docker-compose.prod.yml exec worker top
+```
+
+### Database Connection Scaling
+
+#### PostgreSQL Connection Pooling
+
+**Environment Variables:**
+```bash
+# Increase connection pool size
+POSTGRES_POOL_SIZE=20
+POSTGRES_MAX_OVERFLOW=30
+```
+
+#### Redis Connection Scaling
+
+**Redis Configuration:**
+```bash
+# Redis connection pool
+REDIS_POOL_SIZE=5
+REDIS_MAX_CONNECTIONS=20
+```
+
+### Monitoring and Alerting
+
+#### Service Health Monitoring
+
+**Health Check Script:**
+```bash
+#!/bin/bash
+# health-check.sh
+
+# Check API instances
+for i in {1..3}; do
+    if ! curl -f http://localhost:800$i/health; then
+        echo "API instance $i is down"
+        exit 1
+    fi
+done
+
+# Check worker instances
+if ! docker compose -f docker-compose.prod.yml exec worker celery -A app.worker.celery_app inspect ping; then
+    echo "Worker is down"
+    exit 1
+fi
+
+echo "All services healthy"
+```
+
+#### Auto-Scaling Triggers
+
+**CPU-Based Scaling:**
+```bash
+# Monitor CPU usage and scale automatically
+if [ $(docker stats --no-stream --format "table {{.CPUPerc}}" research_api_prod | tail -n +2 | sed 's/%//') -gt 80 ]; then
+    docker compose -f docker-compose.prod.yml up -d --scale research-api=4
+fi
+```
+
+**Queue-Based Scaling:**
+```bash
+# Scale workers based on queue length
+QUEUE_LENGTH=$(docker compose -f docker-compose.prod.yml exec worker celery -A app.worker.celery_app inspect reserved | jq length)
+if [ $QUEUE_LENGTH -gt 10 ]; then
+    docker compose -f docker-compose.prod.yml up -d --scale worker=5
+fi
+```
+
+### Best Practices
+
+#### Zero-Downtime Deployment
+
+1. **Rolling Updates**: Update one service at a time
+2. **Health Checks**: Verify service health before proceeding
+3. **Graceful Shutdown**: Allow running tasks to complete
+4. **Load Balancing**: Distribute traffic across instances
+
+#### Resource Planning
+
+1. **Memory**: Plan for 2x current usage during scaling
+2. **CPU**: Monitor utilization and scale accordingly
+3. **Network**: Ensure sufficient bandwidth for load balancing
+4. **Storage**: Monitor disk usage for logs and data
+
+#### Monitoring Strategy
+
+1. **Service Health**: Regular health checks
+2. **Resource Usage**: CPU, memory, disk monitoring
+3. **Queue Length**: Celery task queue monitoring
+4. **Response Times**: API performance tracking
 
 ## Performance Optimization
 
