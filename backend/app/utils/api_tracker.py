@@ -57,7 +57,11 @@ class SimpleTavilyClient:
             }
             
             logger.info(f"[{self.request_id}] Making real Tavily Search API call with query: '{query}'")
-            logger.info(f"[{self.request_id}] Tavily Search API payload: {payload}")
+            
+            # Log payload without exposing API key
+            safe_payload = payload.copy()
+            safe_payload["api_key"] = "***MASKED***"
+            logger.info(f"[{self.request_id}] Tavily Search API payload: {safe_payload}")
             
             response = requests.post(url, json=payload, headers=headers, timeout=30)
             response.raise_for_status()
@@ -108,6 +112,11 @@ class SimpleTavilyClient:
             }
             
             logger.info(f"[{self.request_id}] Making real Tavily Extract API call for {len(urls)} URLs with timeout=60s")
+            
+            # Log payload without exposing API key
+            safe_payload = payload.copy()
+            safe_payload["api_key"] = "***MASKED***"
+            logger.info(f"[{self.request_id}] Tavily Extract API payload: {safe_payload}")
             
             response = requests.post(url, json=payload, headers=headers, timeout=60)
             response.raise_for_status()
