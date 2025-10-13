@@ -9,6 +9,7 @@ export default function ActiveResearchProgress({ activeTask, getResearchConfig, 
   const [isOpen, setIsOpen] = useState(true); // Start expanded (Collapsible state)
   const prevTaskIdRef = useRef(null); // Track task changes
   const [elapsedTime, setElapsedTime] = useState('0:00'); // Elapsed time display
+  const [startTime, setStartTime] = useState(null); // Client-side start time
 
   const progress = activeTask?.workflow_status?.progress || activeTask?.progress || 0;
   const currentStep = activeTask?.workflow_status?.current_step || activeTask?.current_step;
@@ -68,12 +69,20 @@ export default function ActiveResearchProgress({ activeTask, getResearchConfig, 
   }, [activeTask?.request_id]);
 
 
-  // Update elapsed time every second
+  // Client-side timer - start when component mounts with new task
   useEffect(() => {
-    if (!activeTask?.started_at) return;
+    if (activeTask?.request_id && activeTask.request_id !== prevTaskIdRef.current) {
+      // Reset timer for new task
+      setStartTime(Date.now());
+      setElapsedTime('0:00');
+    }
+  }, [activeTask?.request_id]);
+
+  // Update elapsed time every second using client-side start time
+  useEffect(() => {
+    if (!startTime) return;
     
     const updateElapsed = () => {
-      const startTime = new Date(activeTask.started_at).getTime();
       const now = Date.now();
       const elapsed = Math.floor((now - startTime) / 1000); // seconds
       
@@ -90,7 +99,7 @@ export default function ActiveResearchProgress({ activeTask, getResearchConfig, 
       const interval = setInterval(updateElapsed, 1000);
       return () => clearInterval(interval);
     }
-  }, [activeTask?.started_at, isCompleted]);
+  }, [startTime, isCompleted]);
 
   // Auto-collapse when completed (only for successful completion)
   useEffect(() => {
