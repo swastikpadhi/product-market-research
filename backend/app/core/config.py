@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     tavily_api_key: str = ""
     hcaptcha_secret: str = ""
+    auth_key: str = ""
     
     # Database URLs
     postgres_url: str = ""

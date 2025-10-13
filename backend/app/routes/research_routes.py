@@ -48,11 +48,20 @@ async def submit_market_research(
 ) -> ResearchResponse:
     """Submit a new market research request"""
     try:
-        # Verify hCaptcha if provided
-        if request.hcaptcha_response:
-            is_valid = await verify_hcaptcha(request.hcaptcha_response)
-            if not is_valid:
-                raise HTTPException(status_code=400, detail="Invalid captcha verification")
+        # Verify auth key - mandatory
+        if not request.auth_key:
+            raise HTTPException(status_code=400, detail="Auth key required")
+        
+        if request.auth_key != settings.auth_key:
+            raise HTTPException(status_code=401, detail="Invalid auth key")
+        
+        # Verify hCaptcha - now mandatory
+        if not request.hcaptcha_response:
+            raise HTTPException(status_code=400, detail="Captcha verification required")
+        
+        is_valid = await verify_hcaptcha(request.hcaptcha_response)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail="Invalid captcha verification")
         
         result = await research_service.submit_research_request(
             product_idea=request.product_idea,
@@ -61,6 +70,9 @@ async def submit_market_research(
         )
         return ResearchResponse(**result)
         
+    except HTTPException:
+        # Re-raise HTTP exceptions (like captcha validation errors) without wrapping
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

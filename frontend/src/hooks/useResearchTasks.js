@@ -82,7 +82,7 @@ export default function useResearchTasks(appState) {
     });
   }, [currentPage, loadTasks]);
 
-  const submitProductResearch = useCallback(async (productIdea, researchDepth, hcaptchaResponse = null) => {
+  const submitProductResearch = useCallback(async (productIdea, researchDepth, hcaptchaResponse = null, authKey = null) => {
     const { setIsSubmitting, setProductIdea } = appState;
     
     try {
@@ -96,7 +96,8 @@ export default function useResearchTasks(appState) {
         body: JSON.stringify({
           product_idea: productIdea,
           research_depth: researchDepth,
-          hcaptcha_response: hcaptchaResponse
+          hcaptcha_response: hcaptchaResponse,
+          auth_key: authKey
         })
       });
 

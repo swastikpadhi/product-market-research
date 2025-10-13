@@ -23,6 +23,7 @@ export default function ResearchForm({
   const textareaRef = useRef(null);
   const captchaRef = useRef(null);
   const [captchaToken, setCaptchaToken] = useState(null);
+  const [authKey, setAuthKey] = useState("");
 
   // hCaptcha handlers
   const handleCaptchaVerify = (token) => {
@@ -112,7 +113,11 @@ export default function ResearchForm({
                     alert('Please complete the captcha verification');
                     return;
                   }
-                  onSubmit(productIdea, researchDepth, captchaToken);
+                  if (!authKey.trim()) {
+                    alert('Please enter your auth key');
+                    return;
+                  }
+                  onSubmit(productIdea, researchDepth, captchaToken, authKey);
                 }
               }
             }}
@@ -171,16 +176,33 @@ export default function ResearchForm({
           </div>
         </div>
 
-        {/* hCaptcha Widget */}
-        <div className="flex justify-center">
-          <HCaptcha
-            ref={captchaRef}
-            sitekey="be68949a-9332-474e-9454-3eb68bb03042"
-            onVerify={handleCaptchaVerify}
-            onError={handleCaptchaError}
-            onExpire={handleCaptchaExpire}
-            theme="light"
-          />
+        {/* Auth Key and hCaptcha */}
+        <div className="space-y-4">
+          {/* Auth Key Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Auth Key *
+            </label>
+            <input
+              type="password"
+              value={authKey}
+              onChange={(e) => setAuthKey(e.target.value)}
+              placeholder="Enter your auth key"
+              className="w-full px-4 py-2 border-2 border-gray-200 focus:border-blue-500 rounded-xl transition-all duration-200 focus:ring-4 focus:ring-blue-100"
+            />
+          </div>
+          
+          {/* hCaptcha Widget */}
+          <div className="flex justify-center">
+            <HCaptcha
+              ref={captchaRef}
+              sitekey="be68949a-9332-474e-9454-3eb68bb03042"
+              onVerify={handleCaptchaVerify}
+              onError={handleCaptchaError}
+              onExpire={handleCaptchaExpire}
+              theme="light"
+            />
+          </div>
         </div>
 
         <Button 
@@ -189,9 +211,13 @@ export default function ResearchForm({
               alert('Please complete the captcha verification');
               return;
             }
-            onSubmit(productIdea, researchDepth, captchaToken);
+            if (!authKey.trim()) {
+              alert('Please enter your auth key');
+              return;
+            }
+            onSubmit(productIdea, researchDepth, captchaToken, authKey);
           }} 
-          disabled={isSubmitting || !productIdea.trim() || !hasCreditsForSelectedDepth() || !captchaToken}
+          disabled={isSubmitting || !productIdea.trim() || !hasCreditsForSelectedDepth() || !captchaToken || !authKey.trim()}
           className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 hover:from-blue-700 hover:via-purple-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-2xl shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
         >
           {isSubmitting ? (
