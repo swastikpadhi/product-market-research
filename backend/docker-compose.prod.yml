@@ -7,9 +7,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 200M
         reservations:
-          memory: 64M
+          memory: 100M
     ports:
       - "8000:8000"
     env_file:
@@ -34,9 +34,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 1.2G
         reservations:
-          memory: 64M
+          memory: 800M
     env_file:
       - .env
     environment:
