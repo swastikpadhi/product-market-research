@@ -1,74 +1,218 @@
-# Product Market Research - Monorepo CI/CD Setup
+# Product-Market Fit Research Assistant
+
+An AI-powered platform that conducts comprehensive market research to validate product ideas and assess product-market fit using multi-agent orchestration.
+
+## 🎯 Overview
+
+This application uses LangGraph to orchestrate multiple AI agents that perform market analysis, competitor research, and customer insights gathering. The system generates detailed research reports with actionable recommendations for product development and market entry strategies.
+
+## ✨ Key Features
+
+- **Multi-Agent Research**: Orchestrated AI agents for market, competitor, and customer analysis
+- **Real-time Progress Tracking**: Live updates on research progress with 17 checkpoints
+- **Comprehensive Reports**: Detailed insights with citations and strategic recommendations
+- **Credit System**: Usage-based pricing with limits
+- **Export Functionality**: Download research reports
+- **Responsive UI**: Modern React interface with real-time updates
 
 ## 🏗️ Architecture
 
-- **Backend**: FastAPI + Celery on EC2 with Docker
-- **Frontend**: React app on S3 + CloudFront
-- **Container Registry**: GitHub Container Registry (GHCR) - FREE!
-- **Structure**: Monorepo with separate CI/CD pipelines
+- **Backend**: FastAPI + Celery + LangGraph on EC2 with Docker
+- **Frontend**: React app with Tailwind CSS
+- **Databases**: PostgreSQL (Neon) + MongoDB (Atlas) + Redis (Redis Cloud)
+- **AI**: OpenAI GPT-4 + Tavily Search API
+- **Deployment**: See TECHNICAL_DOCUMENTATION.md for deployment details
 
-## 🚀 Quick Setup
+## 🚀 Quick Start
 
-### 1. Backend (EC2 + Docker)
+### Prerequisites
 
-**EC2 Setup (One-time):**
+- Python 3.9+
+- Node.js 18+
+- Docker & Docker Compose
+- PostgreSQL, MongoDB, Redis
+
+### Backend Setup
+
 ```bash
-# Install Docker & Docker Compose
-curl -fsSL https://get.docker.com -o get-docker.sh && sudo sh get-docker.sh
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
+cd backend
+pip install -r requirements.txt
+
+# Set up environment variables
+cp env.prod.template .env
+# Edit .env with your API keys and database URLs
+
+# Initialize database
+psql "postgresql://user:pass@host:5432/dbname" -f database_schema.sql
+
+# Start services
+python main.py
 ```
 
-**Copy files to EC2:**
-- `backend/docker-compose.prod.yml`
-- `backend/nginx.conf` 
-- `backend/.env.prod` (create from template)
+### Frontend Setup
 
-**GitHub Secrets:**
-- `EC2_HOST` - Your EC2 IP
-- `EC2_USERNAME` - ubuntu
-- `EC2_SSH_KEY` - Your SSH private key
-
-### 2. Frontend (S3 + CloudFront)
-
-**GitHub Secrets:**
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `REACT_APP_API_URL` - Your backend API URL
-
-**S3 Setup:**
 ```bash
-# Create S3 bucket
-aws s3 mb s3://product-market-research-frontend
-
-# Configure for static hosting
-aws s3 website s3://product-market-research-frontend --index-document index.html --error-document index.html
+cd frontend
+npm install
+npm start
 ```
 
-## 🔄 Deployment
+### Environment Variables
 
-- **Backend**: Push changes to `backend/` → GitHub Actions builds Docker image → Pushes to GHCR → Deploys to EC2
-- **Frontend**: Push changes to `frontend/` → GitHub Actions builds React app → Deploys to S3 → Invalidates CloudFront
+**Backend (.env):**
+```bash
+# Environment
+ENVIRONMENT=[production|development]
 
-## 📁 Monorepo Structure
+# API Keys
+OPENAI_API_KEY=your_openai_api_key_here
+TAVILY_API_KEY=your_tavily_api_key_here
+HCAPTCHA_SECRET=your_hcaptcha_secret_here
+AUTH_KEY=your_auth_key_here
+
+# Database URLs (Cloud Services)
+POSTGRES_URL=postgresql+asyncpg://username:password@your-neon-host:5432/database_name
+MONGODB_URL=mongodb+srv://username:password@cluster.mongodb.net/database_name
+REDIS_URL=redis://username:password@your-redis-cloud-host:6379
+
+# API Configuration
+API_HOST=0.0.0.0
+PORT=8000
+
+# Celery Configuration (optional - will use Redis URLs if not set)
+CELERY_BROKER_URL=redis://your-redis-host:6379/0
+CELERY_RESULT_BACKEND=redis://your-redis-host:6379/0
+
+# Logging Configuration
+LOG_FILE=backend_server.log
+CELERY_LOG_FILE=celery_worker.log
+LOG_LEVEL=INFO
+```
+
+**Frontend Configuration:**
+The frontend automatically reads backend configuration through the `start.sh` script.
+
+## 📖 Usage
+
+### 1. Submit Research Request
+
+Enter your product idea and select research depth:
+- **Essential**: Fast validation with key insights
+- **Standard**: Detailed analysis with strategic recommendations  
+- **Deep**: Comprehensive intelligence with in-depth analysis
+
+### 2. Monitor Progress
+
+Track research progress through 17 checkpoints:
+- Research plan creation
+- Query generation
+- Market/competitor/customer searches
+- Data extraction and analysis
+- Report generation
+
+### 3. View Results
+
+Access comprehensive reports with:
+- Executive summary
+- Market insights and trends
+- Competitive landscape analysis
+- Customer pain points and needs
+- Product-market fit assessment
+- Strategic recommendations
+- Source citations
+
+## 📁 Project Structure
 
 ```
 product-market-research/
-├── backend/
-│   ├── .github/workflows/deploy.yml    # Backend CI/CD
-│   ├── docker-compose.prod.yml         # Docker configuration
-│   ├── nginx.conf                      # Nginx reverse proxy
-│   └── env.prod.template              # Environment variables
-├── frontend/
-│   └── .github/workflows/deploy.yml   # Frontend CI/CD
-└── README.md
+├── backend/                   # FastAPI backend
+│   ├── app/
+│   │   ├── core/              # Core utilities and config
+│   │   │   ├── langgraph/     # LangGraph agents and supervisor
+│   │   │   └── prompts.py     # Centralized AI prompts
+│   │   ├── db/                # Database managers
+│   │   ├── models/            # SQLAlchemy models
+│   │   ├── routes/            # API endpoints
+│   │   ├── services/          # Business logic
+│   │   ├── worker/            # Celery tasks
+│   │   └── mocks/             # Development mocks
+│   ├── main.py                # FastAPI application
+│   └── requirements.txt       # Python dependencies
+├── frontend/                  # React frontend
+│   ├── src/
+│   │   ├── components/        # React components
+│   │   │   ├── research/      # Research-related components
+│   │   │   ├── report/        # Report display components
+│   │   │   └── ui/            # Reusable UI components
+│   │   ├── hooks/             # Custom React hooks
+│   │   ├── utils/             # Utility functions
+│   │   └── config/            # Configuration
+│   └── package.json           # Node.js dependencies
+└── README.md                  # This file
 ```
 
-## 🎯 Key Benefits
+## 🔧 Development
 
-- **Separate CI/CD**: Backend and frontend deploy independently
-- **Path-based triggers**: Only relevant workflows run
-- **Single repository**: Easier to manage
-- **Free GHCR**: No AWS ECR costs
+### Backend Development
 
-That's it! 🎉
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run with auto-reload
+uvicorn main:app --reload
+
+# Run Celery worker
+celery -A app.worker.celery_app worker --loglevel=info
+```
+
+### Frontend Development
+
+```bash
+# Install dependencies
+npm install
+
+# Run linter
+npm run lint
+
+# Start development server
+npm start
+```
+
+
+## 📊 Research Depth Options
+
+|   Depth   |              Description               |  Duration  |   Credits  |
+|-----------|----------------------------------------|------------|------------|
+| Essential | Fast validation with key insights      | ~1 minutes | 6 credits  |
+| Standard  | Detailed analysis with recommendations | ~2 minutes | 12 credits |
+| Deep      | Comprehensive intelligence             | ~3 minutes | 18 credits |
+
+## 🔍 Example Research Output
+
+The system generates reports with:
+- **Market Size**: Current and projected market values
+- **Growth Trends**: Industry growth rates and drivers
+- **Competitors**: Key players, pricing, positioning
+- **Customer Insights**: Pain points, needs, segments
+- **Product-Market Fit**: Fit score and success probability
+- **Recommendations**: Strategic actions and next steps
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests and linters
+5. Submit a pull request
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🆘 Support
+
+For questions or issues:
+- Check the technical documentation
+- Review the codebase structure
+- Open an issue on GitHub

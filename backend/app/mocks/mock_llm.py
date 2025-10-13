@@ -79,10 +79,6 @@ class MockChatOpenAI:
         
         return MockResponse(response_content, self.model)
     
-    async def ainvoke(self, messages, **kwargs):
-        """Async version of invoke for compatibility with LangChain"""
-        return self._process_messages(messages, **kwargs)
-    
     def _generate_contextual_response(self, user_message: str) -> str:
         """Generate contextual response based on message content"""
         user_message_lower = user_message.lower()
@@ -130,7 +126,7 @@ class MockChatOpenAI:
             elif "extraction" in user_message_lower:
                 extraction_data = self.mock_responses.get_mock_customer_extraction_results()
                 return json.dumps(extraction_data, indent=2)
-        else:
+            else:
                 analysis_data = self.mock_responses.get_mock_customer_analysis()
                 return json.dumps(analysis_data, indent=2)
         
