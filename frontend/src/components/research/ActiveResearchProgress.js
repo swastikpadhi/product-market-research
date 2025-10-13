@@ -69,18 +69,20 @@ export default function ActiveResearchProgress({ activeTask, getResearchConfig, 
   }, [activeTask?.request_id]);
 
 
-  // Client-side timer - start when component mounts with new task
+  // Client-side timer - start immediately when component mounts
   useEffect(() => {
-    if (activeTask?.request_id && activeTask.request_id !== prevTaskIdRef.current) {
-      // Reset timer for new task
-      setStartTime(Date.now());
-      setElapsedTime('0:00');
+    if (activeTask?.request_id) {
+      // Start timer immediately for any active task
+      if (!startTime) {
+        setStartTime(Date.now());
+        setElapsedTime('0:00');
+      }
     }
-  }, [activeTask?.request_id]);
+  }, [activeTask?.request_id, startTime]);
 
   // Update elapsed time every second using client-side start time
   useEffect(() => {
-    if (!startTime) return;
+    if (!startTime || !activeTask) return;
     
     const updateElapsed = () => {
       const now = Date.now();
@@ -99,7 +101,7 @@ export default function ActiveResearchProgress({ activeTask, getResearchConfig, 
       const interval = setInterval(updateElapsed, 1000);
       return () => clearInterval(interval);
     }
-  }, [startTime, isCompleted]);
+  }, [startTime, isCompleted, activeTask]);
 
   // Auto-collapse when completed (only for successful completion)
   useEffect(() => {
