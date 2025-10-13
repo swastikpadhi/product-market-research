@@ -7,6 +7,7 @@ from pydantic import BaseModel
 class ResearchRequest(BaseModel):
     product_idea: str
     research_depth: str = "standard"
+    hcaptcha_response: Optional[str] = None
 
 class ResearchResponse(BaseModel):
     request_id: str

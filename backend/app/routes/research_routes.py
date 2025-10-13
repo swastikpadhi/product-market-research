@@ -1,10 +1,12 @@
 import logging
+import httpx
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, HTTPException
 
 from app.services.research_service import research_service
 from app.repositories.task_repository import task_repository
 from app.core.constants import TOTAL_CHECKPOINTS
+from app.core.config import settings
 from app.db.redis_manager import redis_manager
 from app.schemas.research_schemas import (
     ResearchRequest, ResearchResponse, ResearchStatus, ResearchResult,
@@ -15,6 +17,30 @@ logger = logging.getLogger(__name__)
 
 research_router = APIRouter()
 
+# hCaptcha constants
+HCAPTCHA_VERIFY_URL = "https://hcaptcha.com/siteverify"
+
+async def verify_hcaptcha(hcaptcha_response: str) -> bool:
+    """Verify hCaptcha response with hCaptcha API"""
+    if not settings.hcaptcha_secret:
+        logger.error("hcaptcha_secret not found in configuration")
+        return False
+        
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                HCAPTCHA_VERIFY_URL,
+                data={
+                    "secret": settings.hcaptcha_secret,
+                    "response": hcaptcha_response
+                }
+            )
+            result = response.json()
+            return result.get("success", False)
+    except Exception as e:
+        logger.error(f"hCaptcha verification failed: {e}")
+        return False
+
 @research_router.post("", response_model=ResearchResponse)
 async def submit_market_research(
     request: ResearchRequest,
@@ -22,6 +48,12 @@ async def submit_market_research(
 ) -> ResearchResponse:
     """Submit a new market research request"""
     try:
+        # Verify hCaptcha if provided
+        if request.hcaptcha_response:
+            is_valid = await verify_hcaptcha(request.hcaptcha_response)
+            if not is_valid:
+                raise HTTPException(status_code=400, detail="Invalid captcha verification")
+        
         result = await research_service.submit_research_request(
             product_idea=request.product_idea,
             research_depth=request.research_depth,

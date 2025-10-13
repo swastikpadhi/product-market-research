@@ -91,7 +91,13 @@ export default function ResearchForm({
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (!isSubmitting && productIdea.trim() && hasCreditsForSelectedDepth()) {
-                  onSubmit(productIdea, researchDepth);
+                  // Get hCaptcha response for keyboard shortcut
+                  const hcaptchaResponse = window.hcaptcha.getResponse();
+                  if (!hcaptchaResponse) {
+                    alert('Please complete the captcha verification');
+                    return;
+                  }
+                  onSubmit(productIdea, researchDepth, hcaptchaResponse);
                 }
               }
             }}
@@ -150,9 +156,25 @@ export default function ResearchForm({
           </div>
         </div>
 
+        {/* hCaptcha Widget */}
+        <div className="flex justify-center">
+          <div 
+            className="h-captcha" 
+            data-sitekey="be68949a-9332-474e-9454-3eb68bb03042"
+            data-theme="light"
+          ></div>
+        </div>
 
         <Button 
-          onClick={() => onSubmit(productIdea, researchDepth)} 
+          onClick={() => {
+            // Get hCaptcha response
+            const hcaptchaResponse = window.hcaptcha.getResponse();
+            if (!hcaptchaResponse) {
+              alert('Please complete the captcha verification');
+              return;
+            }
+            onSubmit(productIdea, researchDepth, hcaptchaResponse);
+          }} 
           disabled={isSubmitting || !productIdea.trim() || !hasCreditsForSelectedDepth()}
           className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 hover:from-blue-700 hover:via-purple-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-2xl shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
         >
