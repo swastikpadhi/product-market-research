@@ -1,10 +1,11 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Card, CardContent, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { Label } from '../ui/label';
 import { Alert, AlertDescription } from '../ui/alert';
 import { AlertCircle, Clock, Target } from 'lucide-react';
+import HCaptcha from '@hcaptcha/react-hcaptcha';
 
 export default function ResearchForm({
   productIdea,
@@ -20,6 +21,22 @@ export default function ResearchForm({
   activeTab,
 }) {
   const textareaRef = useRef(null);
+  const captchaRef = useRef(null);
+  const [captchaToken, setCaptchaToken] = useState(null);
+
+  // hCaptcha handlers
+  const handleCaptchaVerify = (token) => {
+    setCaptchaToken(token);
+  };
+
+  const handleCaptchaError = (error) => {
+    console.error('hCaptcha error:', error);
+    setCaptchaToken(null);
+  };
+
+  const handleCaptchaExpire = () => {
+    setCaptchaToken(null);
+  };
 
   // Auto-focus the textarea when component mounts
   useEffect(() => {
@@ -91,13 +108,11 @@ export default function ResearchForm({
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (!isSubmitting && productIdea.trim() && hasCreditsForSelectedDepth()) {
-                  // Get hCaptcha response for keyboard shortcut
-                  const hcaptchaResponse = window.hcaptcha.getResponse();
-                  if (!hcaptchaResponse) {
+                  if (!captchaToken) {
                     alert('Please complete the captcha verification');
                     return;
                   }
-                  onSubmit(productIdea, researchDepth, hcaptchaResponse);
+                  onSubmit(productIdea, researchDepth, captchaToken);
                 }
               }
             }}
@@ -158,22 +173,23 @@ export default function ResearchForm({
 
         {/* hCaptcha Widget */}
         <div className="flex justify-center">
-          <div 
-            className="h-captcha" 
-            data-sitekey="be68949a-9332-474e-9454-3eb68bb03042"
-            data-theme="light"
-          ></div>
+          <HCaptcha
+            ref={captchaRef}
+            sitekey="be68949a-9332-474e-9454-3eb68bb03042"
+            onVerify={handleCaptchaVerify}
+            onError={handleCaptchaError}
+            onExpire={handleCaptchaExpire}
+            theme="light"
+          />
         </div>
 
         <Button 
           onClick={() => {
-            // Get hCaptcha response
-            const hcaptchaResponse = window.hcaptcha.getResponse();
-            if (!hcaptchaResponse) {
+            if (!captchaToken) {
               alert('Please complete the captcha verification');
               return;
             }
-            onSubmit(productIdea, researchDepth, hcaptchaResponse);
+            onSubmit(productIdea, researchDepth, captchaToken);
           }} 
           disabled={isSubmitting || !productIdea.trim() || !hasCreditsForSelectedDepth()}
           className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 hover:from-blue-700 hover:via-purple-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-2xl shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
