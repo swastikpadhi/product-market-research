@@ -191,7 +191,7 @@ export default function ResearchForm({
             }
             onSubmit(productIdea, researchDepth, captchaToken);
           }} 
-          disabled={isSubmitting || !productIdea.trim() || !hasCreditsForSelectedDepth()}
+          disabled={isSubmitting || !productIdea.trim() || !hasCreditsForSelectedDepth() || !captchaToken}
           className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 hover:from-blue-700 hover:via-purple-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-2xl shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
         >
           {isSubmitting ? (
