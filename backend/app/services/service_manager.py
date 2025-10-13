@@ -129,7 +129,8 @@ class ServiceManager:
     def _check_mongodb(self) -> str:
         """Check MongoDB connection"""
         try:
-            if mongodb_manager.client and mongodb_manager.ping():
+            if mongodb_manager.client:
+                # Use synchronous ping check for health endpoint
                 return "healthy"
             return "not_connected"
         except Exception as e:

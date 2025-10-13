@@ -10,20 +10,30 @@ export const exportResults = async (task, reportData, fetchReport) => {
     }
   }
 
-  const finalReport = report.final_report || {};
-  const content = generateMarkdownReport(task, finalReport);
+  const finalReport = report.result?.final_report || {};
+  const content = generateMarkdownReport(task, finalReport, report);
 
   const blob = new Blob([content], { type: 'text/markdown' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `market-research-${(task.metadata?.sector || task.sector || 'unknown').replace(/\s+/g, '-').toLowerCase()}-${task.request_id.slice(0, 8)}.md`;
+  a.download = `market-research-${(task.product_idea || 'untitled').replace(/\s+/g, '-').toLowerCase()}-${task.request_id.slice(0, 8)}.md`;
   a.click();
   URL.revokeObjectURL(url);
 };
 
-const generateMarkdownReport = (task, finalReport) => {
-  return `# Market Research Report: ${task.metadata?.sector || task.sector || 'Unknown Sector'}
+// Map backend research depth values to UI display names
+const mapResearchDepth = (depth) => {
+  const mapping = {
+    'basic': 'Essential Research',
+    'standard': 'Standard Research', 
+    'comprehensive': 'Deep Research'
+  };
+  return mapping[depth] || 'N/A';
+};
+
+const generateMarkdownReport = (task, finalReport, report) => {
+  return `# Market Research Report: ${task.product_idea || 'Untitled Idea'}
 
 ## Executive Summary
 ${finalReport.executive_summary?.overview || 'No executive summary available'}
@@ -36,7 +46,30 @@ ${finalReport.executive_summary?.market_assessment || 'No market assessment avai
 
 ## Market Insights
 ${finalReport.market_insights ? `
-**Market Size:** ${finalReport.market_insights.market_size || 'N/A'}
+**Market Size:** ${(() => {
+  const marketSize = finalReport.market_insights.market_size;
+  if (!marketSize) return 'N/A';
+  
+  if (typeof marketSize === 'string') {
+    return marketSize;
+  }
+  
+  if (typeof marketSize === 'object') {
+    // Handle the actual structure with current and projected
+    if (marketSize.current && marketSize.projected) {
+      return `${marketSize.current}, projected to reach ${marketSize.projected}`;
+    } else if (marketSize.current) {
+      return marketSize.current;
+    } else if (marketSize.projected) {
+      return `Projected: ${marketSize.projected}`;
+    }
+    
+    // Fallback for other object structures
+    return JSON.stringify(marketSize, null, 2);
+  }
+  
+  return String(marketSize);
+})()}
 
 **Growth Rate:** ${finalReport.market_insights.growth_rate || 'N/A'}
 
@@ -83,9 +116,27 @@ ${finalReport.customer_insights.primary_pain_points ? finalReport.customer_insig
 ${finalReport.customer_insights.unmet_needs ? finalReport.customer_insights.unmet_needs.map(need => `- ${need}`).join('\n') : 'No unmet needs identified'}
 
 **Customer Segments:**
-${finalReport.customer_insights.customer_segments ? finalReport.customer_insights.customer_segments.map(segment => 
-  typeof segment === 'string' ? `- ${segment}` : `- ${segment.name} (Age: ${segment.age}, Interests: ${segment.interests ? segment.interests.join(', ') : 'N/A'})`
-).join('\n') : 'No customer segments identified'}
+${finalReport.customer_insights.customer_segments && finalReport.customer_insights.customer_segments.length > 0 ? finalReport.customer_insights.customer_segments.map(segment => {
+  if (typeof segment === 'string') {
+    return `- ${segment}`;
+  }
+  
+  let segmentText = `- ${segment.name}`;
+  
+  if (segment.demographics) {
+    segmentText += ` (${segment.demographics})`;
+  }
+  
+  if (segment.characteristics) {
+    segmentText += ` - ${segment.characteristics}`;
+  }
+  
+  if (segment.needs && segment.needs.length > 0) {
+    segmentText += ` - Needs: ${segment.needs.join(', ')}`;
+  }
+  
+  return segmentText;
+}).join('\n') : 'No customer segments identified'}
 
 **Satisfaction Drivers:**
 ${finalReport.customer_insights.satisfaction_drivers ? finalReport.customer_insights.satisfaction_drivers.map(driver => `- ${driver}`).join('\n') : 'No satisfaction drivers identified'}
@@ -136,7 +187,6 @@ ${finalReport.citations.map((citation, idx) => `
 ### [${idx + 1}] ${citation.title || 'Source'}
 - **Type:** ${citation.source_type || 'N/A'}
 - **URL:** ${citation.url || 'N/A'}
-- **Accessed:** ${citation.accessed_date || 'N/A'}
 - **Key Insights:**
 ${citation.key_insights && citation.key_insights.length > 0 ? citation.key_insights.map(insight => `  - ${insight}`).join('\n') : '  - No insights recorded'}
 `).join('\n')}
@@ -144,13 +194,11 @@ ${citation.key_insights && citation.key_insights.length > 0 ? citation.key_insig
 ---
 ` : 'No citations available. This report may be based on limited or unavailable source data.'}
 
-## Metadata
-- **Product Idea:** ${task.product_idea || 'N/A'}
-- **Sector:** ${finalReport.metadata?.sector || task.metadata?.sector || task.sector || 'Unknown Sector'}
-- **Research Depth:** ${task.metadata?.research_depth || 'N/A'}
-- **Sources Analyzed:** 20
-- **Geographic Scope:** ${task.metadata?.geographic_scope || 'N/A'}
-- **Analysis Date:** ${finalReport.metadata?.analysis_date ? new Date(finalReport.metadata.analysis_date).toLocaleString() : new Date().toLocaleString()}
-- **Report Version:** ${finalReport.metadata?.report_version || '1.0'}
+  ## Metadata
+  - **Product Idea:** ${task.product_idea || 'N/A'}
+  - **Sector:** ${report?.result?.research_plan?.sector || task.sector || ''}
+  - **Research Depth:** ${mapResearchDepth(task.research_depth)}
+  - **Analysis Date:** ${finalReport.metadata?.analysis_date ? new Date(finalReport.metadata.analysis_date).toLocaleString() : new Date().toLocaleString()}
+  - **Report Version:** ${finalReport.metadata?.report_version || '1.0'}
 `;
 };

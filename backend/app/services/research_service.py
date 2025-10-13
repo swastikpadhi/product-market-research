@@ -5,9 +5,9 @@ import logging
 from typing import Dict, Any, Optional
 from datetime import datetime
 
-from app.services.credit_service_manager import credit_service_manager
-from app.services.task_repository import task_repository
-from app.services.search_service import search_service
+from app.services.credit_service import credit_service
+from app.repositories.task_repository import task_repository
+from app.core.constants import TOTAL_CHECKPOINTS
 from app.worker.tasks import process_research_task
 from app.core.config import get_logger
 
@@ -22,6 +22,25 @@ class ResearchService:
             "standard": 12,      # 3 search (advanced) + 15 URLs extract (advanced) = 12 credits
             "comprehensive": 18   # 3 search (advanced) + 30 URLs extract (advanced) = 18 credits
         }
+        # Redis cache TTL - no instance-level caching
+        self._cache_ttl = 15 * 60  # 15 minutes cache TTL
+    
+    # REMOVED: Async cache invalidation method no longer needed
+    # - _invalidate_credit_cache() - unused after removing async credit methods
+    def _invalidate_credit_cache_sync(self, user_id: str) -> None:
+        """Invalidate Redis cached credit balance (sync version for Celery)"""
+        try:
+            from app.db.database_factory import database_factory, celery_context
+            with celery_context():
+                redis_manager = database_factory.get_redis_manager()
+                if redis_manager.is_connected:
+                    # Use sync Redis client for Celery context
+                    redis_client = redis_manager.get_sync_client()
+                    if redis_client:
+                        redis_client.delete("global_credit_balance")
+                        logger.debug(f"Cleared Redis credit balance cache (sync)")
+        except Exception as e:
+            logger.warning(f"Failed to clear Redis cache (sync): {e}")
     
     async def submit_research_request(
         self, 
@@ -53,17 +72,15 @@ class ResearchService:
                 "credits_required": credits_needed,
                 "user_id": user_id,
                 "started_at": datetime.now().isoformat(),
-                "created_at": datetime.now().isoformat()
+                "created_at": datetime.now().isoformat(),
+                "completed_checkpoints": []  # Initialize as empty array
             }
             
             # Save task to repository
             await task_repository.create(task_data)
             
-            # Index task for search (async, don't wait for it)
-            try:
-                await search_service.index_task(task_data)
-            except Exception as e:
-                logger.warning(f"Failed to index task {request_id} for search: {e}")
+            # Note: MongoDB text index will automatically index the task data
+            # No need for separate indexing service
             
             # Submit to Celery worker
             task = process_research_task.delay(
@@ -94,14 +111,11 @@ class ResearchService:
                 "status": task.get("status", "unknown"),
                 "current_step": task.get("current_step", "initializing"),
                 "progress": task.get("progress", 0),
-                "details": task.get("details", "Research in progress..."),
                 "started_at": task.get("started_at"),
                 "completed_at": task.get("completed_at"),
                 "research_depth": task.get("research_depth", "standard"),
                 "product_idea": task.get("product_idea", ""),
-                "completed_checkpoints": task.get("completed_checkpoints", []),
-                "total_checkpoints": task.get("total_checkpoints", 17),
-                "last_updated": task.get("last_updated", task.get("updated_at", task.get("started_at")))
+                "completed_checkpoints": len(task.get("completed_checkpoints", [])) if isinstance(task.get("completed_checkpoints"), list) else task.get("completed_checkpoints", 0)
             }
             
         except Exception as e:
@@ -139,42 +153,82 @@ class ResearchService:
             raise
     
     async def get_user_searches_remaining(self, user_id: str = "default") -> Dict[str, Any]:
-        """Get remaining searches count with business logic"""
+        """Get remaining searches count using Redis cached credit balance with PostgreSQL fallback"""
         try:
-            credit_service = credit_service_manager.get_credit_service()
-            account = await credit_service.get_account(user_id)
+            from app.db.database_factory import database_factory, fastapi_context
+            import json
             
-            if not account:
-                # Create account with initial credits if it doesn't exist
-                await credit_service.create_account(user_id, initial_credits=100.0)
-                account = await credit_service.get_account(user_id)
-            
-            # Calculate searches remaining for each research depth
-            searches_remaining = {}
-            for depth, cost in self.credit_costs.items():
-                searches_remaining[depth] = int(account.current_balance / cost) if account else 0
-            
-            return {
-                "searches_remaining": searches_remaining,
-                "credit_balance": account.current_balance if account else 0,
-                "user_id": user_id
-            }
-            
+            with fastapi_context():
+                redis_client = database_factory.get_redis_client()
+                current_balance = None
+                
+                # Try Redis cache first for credit balance
+                if redis_client:
+                    try:
+                        cached_balance = await redis_client.get("global_credit_balance")
+                        if cached_balance:
+                            current_balance = int(cached_balance)
+                            logger.debug(f"Using Redis cached credit balance: {current_balance}")
+                    except Exception as e:
+                        logger.warning(f"Redis cache read failed: {e}")
+                
+                # Fallback to PostgreSQL if no cache
+                if current_balance is None:
+                    logger.debug(f"Fetching fresh credit balance from PostgreSQL")
+                    try:
+                        # Get account from PostgreSQL
+                        account = await credit_service.get_account(user_id)
+                        current_balance = account.current_balance if account else 0
+                    except Exception as e:
+                        logger.warning(f"PostgreSQL fallback failed: {e}")
+                        current_balance = 0
+                
+                # Calculate searches remaining from credit balance
+                searches_remaining = {
+                    depth: int(current_balance / cost) 
+                    for depth, cost in self.credit_costs.items()
+                }
+                
+                result = {
+                    "searches_remaining": searches_remaining,
+                    "credit_balance": current_balance,
+                    "user_id": user_id
+                }
+                
+                # Cache only the credit balance in Redis for future requests
+                if redis_client and current_balance is not None:
+                    try:
+                        await redis_client.setex("global_credit_balance", self._cache_ttl, str(current_balance))
+                        logger.debug(f"Cached credit balance in Redis: {current_balance}")
+                    except Exception as e:
+                        logger.warning(f"Redis cache write failed: {e}")
+                
+                return result
+                
         except Exception as e:
             logger.error(f"Error getting searches remaining: {e}")
             raise
     
+    
     async def _validate_user_credits(self, user_id: str, credits_needed: int) -> None:
-        """Validate user has sufficient credits"""
-        credit_service = credit_service_manager.get_credit_service()
-        account = await credit_service.get_account(user_id)
-        
-        if not account:
-            await credit_service.create_account(user_id, initial_credits=100)
-            account = await credit_service.get_account(user_id)
-        
-        if account.current_balance < credits_needed:
-            raise ValueError(f"Insufficient credits. Need {credits_needed} credits, have {account.current_balance}")
+        """Validate user has sufficient credits using cached data from searches API"""
+        try:
+            # Get cached data from searches API (this will use cache if available)
+            searches_data = await self.get_user_searches_remaining(user_id)
+            current_balance = searches_data["credit_balance"]
+            
+            if current_balance < credits_needed:
+                raise ValueError(f"Insufficient credits. Need {credits_needed} credits, have {current_balance}")
+            
+            logger.info(f"Credit validation passed for {user_id}: {current_balance} credits available")
+            
+        except ValueError:
+            # Re-raise credit errors
+            raise
+        except Exception as e:
+            # For other errors, log warning but proceed (graceful degradation)
+            logger.warning(f"Credit validation failed for {user_id}, proceeding anyway: {e}")
+            return
     
     def _generate_request_id(self, product_idea: str) -> str:
         """Generate unique request ID"""

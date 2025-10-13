@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings(BaseSettings):
+    # Environment
+    environment: str = "development"
+    
     # API Keys
     openai_api_key: str = ""
     tavily_api_key: str = ""
@@ -26,9 +29,9 @@ class Settings(BaseSettings):
     celery_result_backend: str = ""
     
     # Logging Configuration
-    log_file: str = ""
-    celery_log_file: str = ""
-    log_level: str = ""
+    log_file: str = "backend_server.log"
+    celery_log_file: str = "celery_worker.log"
+    log_level: str = "INFO"
     
     class Config:
         env_file = ".env"
@@ -60,15 +63,8 @@ def get_logger(name: str) -> logging.Logger:
         if log_file and log_file.strip():
             # Ensure log file path is absolute or in a writable directory
             if not os.path.isabs(log_file):
-                # If relative path, create logs directory and use absolute path
-                if os.environ.get('ENVIRONMENT') == 'development':
-                    # In development, use current working directory instead of /app
-                    logs_dir = os.path.join(os.getcwd(), "logs")
-                else:
-                    # In production, use /app/logs
-                    logs_dir = "/app/logs"
-                os.makedirs(logs_dir, exist_ok=True)
-                log_file = os.path.join(logs_dir, log_file)
+                # If relative path, use current working directory
+                log_file = os.path.join(os.getcwd(), log_file)
             file_handler = logging.FileHandler(log_file)
         else:
             # Default to stdout if no log file specified

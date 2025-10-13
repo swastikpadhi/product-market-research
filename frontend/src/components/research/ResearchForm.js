@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Card, CardContent, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
@@ -17,10 +17,44 @@ export default function ResearchForm({
   error,
   onSubmit,
   getResearchConfig,
+  activeTab,
 }) {
+  const textareaRef = useRef(null);
+
+  // Auto-focus the textarea when component mounts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Auto-focus the textarea when switching to this tab
+  useEffect(() => {
+    if (activeTab === 'new-research') {
+      // Add a small delay to ensure the DOM is ready
+      const timer = setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab]);
   const getSearchesRemaining = (depth) => {
     if (!searchesRemaining || isLoadingSearches) return 'N/A';
     return searchesRemaining[depth] || 0;
+  };
+
+  // Check if user has any credits for the selected research depth
+  const hasCreditsForSelectedDepth = () => {
+    if (!searchesRemaining || isLoadingSearches) return false;
+    const remaining = searchesRemaining[researchDepth] || 0;
+    return remaining > 0;
   };
 
   return (
@@ -48,10 +82,19 @@ export default function ResearchForm({
             Product Idea *
           </Label>
           <Textarea
+            ref={textareaRef}
             id="productIdea"
             placeholder="e.g., A mobile app that helps small businesses manage inventory using AI, or a SaaS platform for remote team collaboration"
             value={productIdea}
             onChange={(e) => setProductIdea(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!isSubmitting && productIdea.trim() && hasCreditsForSelectedDepth()) {
+                  onSubmit(productIdea, researchDepth);
+                }
+              }
+            }}
             className="min-h-[100px] border-2 border-gray-200 focus:border-blue-500 rounded-xl resize-none transition-all duration-200 focus:ring-4 focus:ring-blue-100"
           />
           <p className="text-xs text-gray-500 mt-2">Target market/sector will be automatically extracted from your product idea</p>
@@ -70,7 +113,10 @@ export default function ResearchForm({
               return (
                 <div
                   key={depth}
-                  onClick={() => setResearchDepth(depth)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setResearchDepth(depth);
+                  }}
                   className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 flex flex-col ${
                     researchDepth === depth
                       ? 'border-blue-500 bg-blue-50 shadow-md'
@@ -88,9 +134,9 @@ export default function ResearchForm({
                   <div className="flex items-center justify-center text-xs pt-2 border-t border-gray-200 mt-auto h-6">
                     {isLoadingSearches ? (
                       <div className="flex items-center gap-1">
-                        <div className="w-1 h-1 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                        <div className="w-1 h-1 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                        <div className="w-1 h-1 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                        <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce"></div>
+                        <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                        <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                       </div>
                     ) : (
                       <span className="font-semibold text-blue-600">
@@ -107,13 +153,18 @@ export default function ResearchForm({
 
         <Button 
           onClick={() => onSubmit(productIdea, researchDepth)} 
-          disabled={isSubmitting || !productIdea.trim()}
+          disabled={isSubmitting || !productIdea.trim() || !hasCreditsForSelectedDepth()}
           className="w-full bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 hover:from-blue-700 hover:via-purple-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-2xl shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-[1.02] hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
         >
           {isSubmitting ? (
             <>
               <Clock className="w-6 h-6 mr-3 animate-spin" />
               Researching Product-Market Fit...
+            </>
+          ) : !hasCreditsForSelectedDepth() ? (
+            <>
+              <Target className="w-6 h-6 mr-3" />
+              Insufficient Credits
             </>
           ) : (
             <>

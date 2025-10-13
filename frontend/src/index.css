@@ -122,3 +122,19 @@
 .animate-slideDown {
   animation: slideDown 1.2s ease-in-out;
 }
+
+/* Wave animation for loading dots */
+@keyframes wave {
+  0%, 100% {
+    transform: translateY(0px);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+.animate-wave {
+  animation: wave 1.2s ease-in-out infinite;
+}

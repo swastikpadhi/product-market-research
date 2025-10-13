@@ -2,36 +2,41 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Search, X } from 'lucide-react';
 import { API_BASE } from '../../config/api';
 
-export default function ResearchSearch({ onSearchResults, onClearSearch }) {
+export default function ResearchSearch({ onSearchResults, onClearSearch, statusFilter = null }) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
+  const [isMainSearching, setIsMainSearching] = useState(false);
   const debounceRef = useRef(null);
   const searchRef = useRef(null);
   const abortControllerRef = useRef(null);
 
-  const searchTasks = useCallback(async (searchQuery) => {
+  const searchTasks = useCallback(async (searchQuery, statusFilter = null) => {
     if (!searchQuery.trim()) {
       onClearSearch();
       return;
     }
 
-    setIsSearching(true);
+    setIsMainSearching(true);
     try {
-      const response = await fetch(`${API_BASE}/search?query=${encodeURIComponent(searchQuery)}&limit=20`);
+      let url = `${API_BASE}/search?query=${encodeURIComponent(searchQuery)}&limit=5&page=1`;
+      if (statusFilter && statusFilter !== 'all' && statusFilter !== '') {
+        url += `&status=${encodeURIComponent(statusFilter)}`;
+      }
+      
+      const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
-        onSearchResults(data.results || []);
+        onSearchResults(data, searchQuery);
       } else {
         console.error('Search failed');
-        onSearchResults([]);
+        onSearchResults({ results: [], total: 0, page: 1, total_pages: 0 }, searchQuery);
       }
     } catch (err) {
       console.error('Search error:', err);
-      onSearchResults([]);
+      onSearchResults({ results: [], total: 0, page: 1, total_pages: 0 }, searchQuery);
     } finally {
-      setIsSearching(false);
+      setIsMainSearching(false);
     }
   }, [onSearchResults, onClearSearch]);
 
@@ -95,15 +100,20 @@ export default function ResearchSearch({ onSearchResults, onClearSearch }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (query.trim()) {
-      searchTasks(query);
+      // Cancel any ongoing suggestions request when user hits enter
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      searchTasks(query, statusFilter);
       setShowSuggestions(false);
     }
   };
 
   const handleSuggestionClick = (suggestion) => {
     setQuery(suggestion.query);
-    searchTasks(suggestion.query);
     setShowSuggestions(false);
+    // Trigger search with the suggestion's product_idea
+    searchTasks(suggestion.query, statusFilter);
   };
 
   const handleClear = () => {
@@ -158,7 +168,8 @@ export default function ResearchSearch({ onSearchResults, onClearSearch }) {
             value={query}
             onChange={handleInputChange}
             placeholder="Search research reports..."
-            className="w-full pl-10 pr-10 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl text-sm font-medium text-white placeholder-white/70 focus:bg-white/30 focus:ring-4 focus:ring-white/20 focus:border-transparent transition-all duration-200"
+            disabled={isMainSearching}
+            className={`w-full pl-10 pr-10 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl text-sm font-medium text-white placeholder-white/70 focus:bg-white/30 focus:ring-4 focus:ring-white/20 focus:border-transparent transition-all duration-200 ${isMainSearching ? 'opacity-50 cursor-not-allowed' : ''}`}
           />
           {query && (
             <button
@@ -171,9 +182,9 @@ export default function ResearchSearch({ onSearchResults, onClearSearch }) {
           )}
         </div>
         
-        {isSearching && (
+        {isMainSearching && (
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
           </div>
         )}
       </form>

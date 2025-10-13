@@ -14,7 +14,8 @@ logger = get_logger(__name__)
 class ReportGenerationAgent:
 
     def __init__(self, openai_api_key: str):
-        self.llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key, temperature=0.1)
+        from app.core.ai_client import get_llm_client
+        self.llm = get_llm_client(openai_api_key)
     
     async def generate_report(
         self,
@@ -29,11 +30,11 @@ class ReportGenerationAgent:
             product_idea = context.get("product_idea", "")
             sector = context.get("sector", "")
             
-            market_analysis = market_result.get("analysis", {}) if market_result.get("status") == "success" else {}
+            market_analysis = market_result.get("analysis", {}) if market_result and market_result.get("status") == "success" else {}
             competitor_analysis = (competitor_result.get("analysis", {})
-                                   if competitor_result.get("status") == "success" else {})
+                                   if competitor_result and competitor_result.get("status") == "success" else {})
             customer_insights = (customer_result.get("analysis", {})
-                                 if customer_result.get("status") == "success" else {})
+                                 if customer_result and customer_result.get("status") == "success" else {})
             
             market_count = market_result.get("sources_analyzed", 0) if market_result else 0
             competitor_count = competitor_result.get("sources_analyzed", 0) if competitor_result else 0

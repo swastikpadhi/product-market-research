@@ -14,10 +14,12 @@ export default function useResearchTasks(appState) {
   const [reportData, setReportData] = useState({});
   const [loadingReports, setLoadingReports] = useState({});
   const [reportTabs, setReportTabs] = useState('overview');
+  const [isSearchMode, setIsSearchMode] = useState(false);
   const isPollingRef = useRef(false);
 
   const loadTasks = useCallback(async () => {
     if (isPollingRef.current) return; // Prevent concurrent requests
+    if (isSearchMode) return; // Don't load tasks when in search mode
     isPollingRef.current = true;
     setIsLoading(true);
     
@@ -56,14 +58,36 @@ export default function useResearchTasks(appState) {
       setIsLoading(false);
       isPollingRef.current = false;
     }
-  }, [currentPage, statusFilter]);
+  }, [currentPage, statusFilter, isSearchMode]);
 
-  const addTask = (task) => {
+  const addTask = useCallback((task) => {
     setResearchTasks(prev => [task, ...prev]);
-  };
+  }, []);
+
+  const removeTask = useCallback((requestId) => {
+    setResearchTasks(prev => {
+      const newTasks = prev.filter(task => task.request_id !== requestId);
+      
+      // Always go to page 1 when removing a task (for rerun scenarios)
+      // This ensures users can see their new running task
+      if (currentPage > 1) {
+        setCurrentPage(1);
+        // Load page 1 after state update
+        setTimeout(() => {
+          loadTasks();
+        }, 0);
+      }
+      
+      return newTasks;
+    });
+  }, [currentPage, loadTasks]);
 
   const submitProductResearch = useCallback(async (productIdea, researchDepth) => {
+    const { setIsSubmitting, setProductIdea } = appState;
+    
     try {
+      setIsSubmitting(true); // Set loading state immediately
+      
       const response = await fetch(`${API_BASE}/`, {
         method: 'POST',
         headers: {
@@ -81,22 +105,28 @@ export default function useResearchTasks(appState) {
           request_id: data.request_id,
           product_idea: productIdea,
           research_depth: researchDepth,
-          status: 'pending',
+          status: 'processing', // Start as processing, not pending
           started_at: new Date().toISOString(),
           progress: 0,
           current_step: 'initializing'
         };
         addTask(newTask);
         setActiveTask(newTask);
+        
+        // Clear the form after successful submission
+        setProductIdea('');
+        
+        // Don't clear isSubmitting here - let the active task component handle it
         return data;
       } else {
         throw new Error('Failed to submit research');
       }
     } catch (err) {
       console.error('Failed to submit research:', err);
+      setIsSubmitting(false); // Clear loading state on error
       throw err;
     }
-  }, [setActiveTask]);
+  }, [setActiveTask, appState, addTask]);
 
   const fetchReport = useCallback(async (requestId) => {
     setLoadingReports(prev => ({ ...prev, [requestId]: true }));
@@ -127,7 +157,21 @@ export default function useResearchTasks(appState) {
         method: 'DELETE'
       });
       if (response.ok) {
-        setResearchTasks(prev => prev.filter(task => task.request_id !== requestId));
+        setResearchTasks(prev => {
+          const newTasks = prev.filter(task => task.request_id !== requestId);
+          
+          // If current page becomes empty and we're not on page 1, go to page 1
+          if (newTasks.length === 0 && currentPage > 1) {
+            setCurrentPage(1);
+            // Load page 1 after state update
+            setTimeout(() => {
+              loadTasks();
+            }, 0);
+          }
+          
+          return newTasks;
+        });
+        
         setReportData(prev => {
           const newData = { ...prev };
           delete newData[requestId];
@@ -140,7 +184,7 @@ export default function useResearchTasks(appState) {
       console.error('Failed to delete task:', err);
       throw err;
     }
-  }, []);
+  }, [currentPage, loadTasks]);
 
   const abortTask = useCallback(async (requestId) => {
     try {
@@ -162,9 +206,9 @@ export default function useResearchTasks(appState) {
     }
   }, []);
 
-  const rerunTask = useCallback(async (requestId) => {
+  const rerunTask = useCallback(async (task) => {
     try {
-      const response = await fetch(`${API_BASE}/${requestId}/rerun`, {
+      const response = await fetch(`${API_BASE}/${task.request_id}/rerun`, {
         method: 'POST'
       });
       if (response.ok) {
@@ -178,16 +222,21 @@ export default function useResearchTasks(appState) {
           progress: 0,
           current_step: 'initializing'
         };
+        
+        // Remove the old failed task and add the new one
+        removeTask(task.request_id);
         addTask(newTask);
+        
         return data;
       } else {
-        throw new Error('Failed to rerun task');
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to rerun task');
       }
     } catch (err) {
       console.error('Failed to rerun task:', err);
       throw err;
     }
-  }, []);
+  }, [addTask, removeTask]);
 
   const toggleFullReport = useCallback((requestId) => {
     setShowFullReport(prev => {
@@ -202,6 +251,10 @@ export default function useResearchTasks(appState) {
         return { [requestId]: true };
       }
     });
+  }, []);
+
+  const collapseAllReports = useCallback(() => {
+    setShowFullReport({});
   }, []);
 
   // No automatic fetching - reports will be fetched on demand when user opens them
@@ -221,14 +274,18 @@ export default function useResearchTasks(appState) {
     setCurrentPage,
     setStatusFilter,
     setReportTabs,
+    isSearchMode,
+    setIsSearchMode,
     loadTasks,
     addTask,
+    removeTask,
     submitProductResearch,
     deleteTask,
     abortTask,
     rerunTask,
     fetchReport,
-    toggleFullReport
+    toggleFullReport,
+    collapseAllReports
   };
 }
 

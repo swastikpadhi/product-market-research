@@ -4,7 +4,7 @@ import { API_BASE } from '../config/api';
 export function useAppState() {
   // Product-Market Fit Research Form State
   const [productIdea, setProductIdea] = useState('');
-  const [researchDepth, setResearchDepth] = useState('standard');
+  const [researchDepth, setResearchDepth] = useState('basic');
   
   // UI State
   const [isSubmitting, setIsSubmitting] = useState(false);

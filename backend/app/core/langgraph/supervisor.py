@@ -27,7 +27,9 @@ class ResearchSupervisor:
     def __init__(self, openai_api_key: str, tavily_api_key: str):
         self.openai_api_key = openai_api_key
         self.tavily_api_key = tavily_api_key
-        self.llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key, temperature=0.1)
+        # Use consistent AI client pattern
+        from app.core.ai_client import get_llm_client
+        self.llm = get_llm_client(openai_api_key)
         
         self.market_agent = MarketAnalysisAgent(openai_api_key, tavily_api_key)
         self.competitor_agent = CompetitorAnalysisAgent(openai_api_key, tavily_api_key)
@@ -72,6 +74,14 @@ class ResearchSupervisor:
             if state.get("abort_requested", False):
                 return mark_aborted(state)
             
+            # Create research plan if not already created
+            if state.get("research_plan") is None:
+                research_plan = await self._parse_and_generate_queries(
+                    context["product_idea"], request_id
+                )
+                state["research_plan"] = research_plan
+                progress_tracker.complete_checkpoint(request_id, "research_plan_created")
+            
             next_step = await self._determine_next_step(state)
             state["current_step"] = next_step
             
@@ -88,14 +98,22 @@ class ResearchSupervisor:
     async def _determine_next_step(self, state: ResearchState) -> str:
         context = state["context"]
         
+        # Fail fast on any errors - don't continue the workflow
         if state.get("errors") and len(state["errors"]) > 0:
+            logger.error(f"Workflow has errors, failing: {state['errors']}")
             return "finalization"
         
+        # Check if we have research plan
+        if state.get("research_plan") is None:
+            return "parallel_analysis"
+        
+        # Check if parallel analysis is complete
         if (state["market_result"] is None and
                 state["competitor_result"] is None and
                 state["customer_result"] is None):
             return "parallel_analysis"
         
+        # Check if report generation is needed
         if state["report_result"] is None:
             return "report_generation"
             
@@ -104,46 +122,44 @@ class ResearchSupervisor:
     def _supervisor_router(self, state: ResearchState) -> str:
         return state["current_step"]
     
-    def _analysis_router(self, state: ResearchState) -> str:
-        if (state["market_result"] and state["competitor_result"] and
-                state["customer_result"] and state["report_result"] is None):
-            return "report_generation"
-        
-        return "next_analysis"
     
     async def _parallel_analysis_node(self, state: ResearchState) -> ResearchState:
         try:
             context = state["context"]
             request_id = context["request_id"]
 
-            from app.services.progress_tracker import progress_tracker
-            await progress_tracker.complete_checkpoint(request_id, "initialization_complete")
+            # Get queries from research plan
+            research_plan = state.get("research_plan", {})
+            if not research_plan:
+                return add_error_to_state(state, "Research plan not found")
             
-            if not hasattr(self, '_queries'):
-                parsed_input = await self._parse_and_generate_queries(
-                    context["product_idea"], request_id
-                )
-                self._queries = {
-                    'market': parsed_input['market_query'],
-                    'competitor': parsed_input['competitor_query'],
-                    'customer': parsed_input['customer_query']
-                }
-                self._sector = parsed_input['sector']
+            # Extract queries from research plan using original format
+            queries = {
+                'market': research_plan.get('market_query', ''),
+                'competitor': research_plan.get('competitor_query', ''),
+                'customer': research_plan.get('customer_query', '')
+            }
+            
+            # Debug logging to check query values
+            logger.info(f"[{request_id}] Extracted queries: market='{queries['market']}', competitor='{queries['competitor']}', customer='{queries['customer']}'")
+            
+            # Checkpoint 2: Queries generated (search queries ready)
+            progress_tracker.complete_checkpoint(request_id, "queries_generated")
             
             import asyncio
             tasks = [
                 self.market_agent.analyze_market_trends(
-                    query=self._queries['market'],
+                    query=queries['market'],
                     context=context,
                     request_id=request_id
                 ),
                 self.competitor_agent.analyze_competitors(
-                    query=self._queries['competitor'],
+                    query=queries['competitor'],
                     context=context,
                     request_id=request_id
                 ),
                 self.customer_agent.analyze_customer_insights(
-                    query=self._queries['customer'],
+                    query=queries['customer'],
                     context=context,
                     request_id=request_id
                 )
@@ -151,9 +167,37 @@ class ResearchSupervisor:
             
             results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            market_result = results[0] if not isinstance(results[0], Exception) else None
-            competitor_result = results[1] if not isinstance(results[1], Exception) else None
-            customer_result = results[2] if not isinstance(results[2], Exception) else None
+            # Fail fast on any agent failures
+            if isinstance(results[0], Exception):
+                error_msg = f"Market agent failed: {results[0]}"
+                logger.error(f"[{request_id}] {error_msg}")
+                return add_error_to_state(state, error_msg)
+            if isinstance(results[1], Exception):
+                error_msg = f"Competitor agent failed: {results[1]}"
+                logger.error(f"[{request_id}] {error_msg}")
+                return add_error_to_state(state, error_msg)
+            if isinstance(results[2], Exception):
+                error_msg = f"Customer agent failed: {results[2]}"
+                logger.error(f"[{request_id}] {error_msg}")
+                return add_error_to_state(state, error_msg)
+            
+            # Check if any agent returned an error status
+            market_result = results[0]
+            competitor_result = results[1]
+            customer_result = results[2]
+            
+            if market_result and market_result.get("status") == "error":
+                error_msg = f"Market analysis failed: {market_result.get('error', 'Unknown error')}"
+                logger.error(f"[{request_id}] {error_msg}")
+                return add_error_to_state(state, error_msg)
+            if competitor_result and competitor_result.get("status") == "error":
+                error_msg = f"Competitor analysis failed: {competitor_result.get('error', 'Unknown error')}"
+                logger.error(f"[{request_id}] {error_msg}")
+                return add_error_to_state(state, error_msg)
+            if customer_result and customer_result.get("status") == "error":
+                error_msg = f"Customer analysis failed: {customer_result.get('error', 'Unknown error')}"
+                logger.error(f"[{request_id}] {error_msg}")
+                return add_error_to_state(state, error_msg)
             
             state["market_result"] = market_result
             state["competitor_result"] = competitor_result
@@ -170,8 +214,25 @@ class ResearchSupervisor:
             context = state["context"]
             request_id = context["request_id"]
 
-            from app.services.progress_tracker import progress_tracker
-            await progress_tracker.complete_checkpoint(request_id, "report_generation_started")
+            # Check if all 3 analysis agents were successful before generating report
+            market_success = state.get("market_result", {}).get("status") == "success"
+            competitor_success = state.get("competitor_result", {}).get("status") == "success"
+            customer_success = state.get("customer_result", {}).get("status") == "success"
+            
+            if not (market_success and competitor_success and customer_success):
+                failed_agents = []
+                if not market_success:
+                    failed_agents.append("market analysis")
+                if not competitor_success:
+                    failed_agents.append("competitor analysis")
+                if not customer_success:
+                    failed_agents.append("customer analysis")
+                
+                error_msg = f"Cannot generate report: {', '.join(failed_agents)} failed"
+                logger.error(f"[{request_id}] {error_msg}")
+                return add_error_to_state(state, error_msg)
+
+            progress_tracker.complete_checkpoint(request_id, "report_generation_started")
             
             result = await self.report_agent.generate_report(
                 market_result=state["market_result"],
@@ -181,10 +242,16 @@ class ResearchSupervisor:
                 request_id=request_id
             )
             
+            # Fail fast if report generation failed
+            if result and result.get("status") == "error":
+                error_msg = f"Report generation failed: {result.get('error', 'Unknown error')}"
+                logger.error(f"[{request_id}] {error_msg}")
+                return add_error_to_state(state, error_msg)
+            
             state["report_result"] = result
             state["final_report"] = result.get("final_report", {})
             
-            await progress_tracker.complete_checkpoint(request_id, "report_generation_completed")
+            progress_tracker.complete_checkpoint(request_id, "report_generation_completed")
             
             return state
             
@@ -197,8 +264,7 @@ class ResearchSupervisor:
             context = state["context"]
             request_id = context["request_id"]
 
-            from app.services.progress_tracker import progress_tracker
-            await progress_tracker.complete_checkpoint(request_id, "finalization_complete")
+            progress_tracker.complete_checkpoint(request_id, "final_report_delivered")
             
             state = mark_completed(state)
             
@@ -209,8 +275,7 @@ class ResearchSupervisor:
             return add_error_to_state(state, f"Finalization error: {str(e)}")
     
     async def _parse_and_generate_queries(self, product_idea: str, request_id: str) -> Dict[str, Any]:
-        # Checkpoint: Queries generated
-        await progress_tracker.complete_checkpoint(request_id, "queries_generated")
+        # Checkpoint: Queries generated (moved to parallel_analysis_node)
         
         system_prompt, human_prompt = format_orchestrator_parse_prompt(product_idea)
         
@@ -328,3 +393,30 @@ class ResearchSupervisor:
             },
             "request_id": state["context"]["request_id"]
         }
+    
+    def execute_research_sync(
+        self,
+        product_idea: str,
+        sector: str,
+        research_depth: str = "standard",
+        request_id: str = "unknown",
+        abort_check: Optional[Callable[[], bool]] = None,
+        progress_callback: Optional[Callable[[str, int, str], Any]] = None
+    ) -> Dict[str, Any]:
+        """Sync version of execute_research for Celery workers"""
+        import asyncio
+        
+        # Create a new event loop for this sync method
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(self.execute_research(
+                product_idea=product_idea,
+                sector=sector,
+                research_depth=research_depth,
+                request_id=request_id,
+                abort_check=abort_check,
+                progress_callback=progress_callback
+            ))
+        finally:
+            loop.close()

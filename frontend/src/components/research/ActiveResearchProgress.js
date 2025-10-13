@@ -4,17 +4,46 @@ import { Button } from '../ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible';
 import { Clock, TrendingUp, Target, CheckCircle, Sparkles, ChevronDown, ExternalLink, XCircle, AlertCircle, Loader } from 'lucide-react';
 
-export default function ActiveResearchProgress({ activeTask, getResearchConfig, onViewReport }) {
+export default function ActiveResearchProgress({ activeTask, getResearchConfig, onViewReport, setActiveTask }) {
   const cardRef = useRef(null);
   const [isOpen, setIsOpen] = useState(true); // Start expanded (Collapsible state)
   const prevTaskIdRef = useRef(null); // Track task changes
   const [elapsedTime, setElapsedTime] = useState('0:00'); // Elapsed time display
 
   const progress = activeTask?.workflow_status?.progress || activeTask?.progress || 0;
-  const details = activeTask?.workflow_status?.details || activeTask?.details || 'Multi-agent analysis in progress...';
   const currentStep = activeTask?.workflow_status?.current_step || activeTask?.current_step;
+  
+  // Get progress message based on checkpoint count (simpler approach)
+  const getProgressMessage = (checkpointCount) => {
+    const messages = {
+      0: '🚀 Starting research...',
+      1: '🎯 Crafting your research strategy...',
+      2: '🔍 Generating targeted search queries...',
+      3: '📊 Analyzing market trends and opportunities...',
+      4: '📈 Gathering market intelligence...',
+      5: '💡 Extracting key market insights...',
+      6: '📋 Synthesizing market insights...',
+      7: '🏢 Researching competitive landscape...',
+      8: '⚔️ Analyzing competitor strategies...',
+      9: '🎯 Identifying competitive gaps...',
+      10: '⚖️ Evaluating competitive positioning...',
+      11: '👥 Understanding customer needs...',
+      12: '💬 Analyzing customer feedback...',
+      13: '🎭 Building customer personas...',
+      14: '🧠 Processing customer intelligence...',
+      15: '📝 Generating comprehensive report...',
+      16: '✨ Finalizing research findings...',
+      17: '🎉 Research complete!'
+    };
+    
+    return messages[checkpointCount] || '🔬 Conducting deep market research...';
+  };
+  
+  // Use checkpoint count to determine progress message (frontend handles this entirely)
+  const checkpointCount = activeTask?.workflow_status?.completed_checkpoints || activeTask?.completed_checkpoints || 0;
+  const details = getProgressMessage(checkpointCount);
   const taskStatus = activeTask?.status;
-  const isCompleted = progress >= 100 || taskStatus === 'completed';
+  const isCompleted = progress >= 100 || taskStatus === 'completed' || currentStep === 'finalization_complete';
   const isFailed = taskStatus === 'failed' || taskStatus === 'error';
   const isAborted = taskStatus === 'aborted';
   // Only show "queued" state if explicitly in queued step (not just progress=0)
@@ -25,43 +54,19 @@ export default function ActiveResearchProgress({ activeTask, getResearchConfig, 
     if (activeTask?.request_id && activeTask.request_id !== prevTaskIdRef.current) {
       setIsOpen(true); // Force expand on new task
       prevTaskIdRef.current = activeTask.request_id;
+      
+      // Smooth scroll to the component when it appears
+      setTimeout(() => {
+        if (cardRef.current) {
+          cardRef.current.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        }
+      }, 100); // Small delay to ensure component is rendered
     }
   }, [activeTask?.request_id]);
 
-  // Progressive scroll into view when component appears
-  useEffect(() => {
-    if (activeTask && cardRef.current) {
-      // Use requestAnimationFrame for smoother, more progressive scroll
-      requestAnimationFrame(() => {
-        const elementPosition = cardRef.current.getBoundingClientRect().top;
-        const offsetPosition = elementPosition + window.pageYOffset - 20;
-        
-        // Progressive smooth scroll with longer duration
-        const startPosition = window.pageYOffset;
-        const distance = offsetPosition - startPosition;
-        const duration = 1000; // 1000ms for smoother scroll
-        let start = null;
-        
-        function progressiveScroll(timestamp) {
-          if (!start) start = timestamp;
-          const progress = timestamp - start;
-          const percentage = Math.min(progress / duration, 1);
-          
-          // Ease-out-cubic for smooth deceleration at the end (no "bang")
-          const ease = 1 - Math.pow(1 - percentage, 3);
-          
-          window.scrollTo(0, startPosition + distance * ease);
-          
-          if (progress < duration) {
-            requestAnimationFrame(progressiveScroll);
-          }
-        }
-        
-        requestAnimationFrame(progressiveScroll);
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTask?.request_id]); // Only trigger on task change, not on progress updates
 
   // Update elapsed time every second
   useEffect(() => {
@@ -98,25 +103,28 @@ export default function ActiveResearchProgress({ activeTask, getResearchConfig, 
     }
   }, [isCompleted, isOpen]);
 
-  // Auto-hide when task fails or is aborted
+  // Handle View Report click - clear activeTask to hide the card
+  const handleViewReport = () => {
+    if (onViewReport) {
+      onViewReport(activeTask?.request_id);
+    }
+    // Clear activeTask to hide the card completely
+    setActiveTask(null);
+  };
+
+  // Auto-collapse when task completes, fails, or is aborted
   useEffect(() => {
-    if (isFailed || isAborted) {
+    if (isCompleted || isFailed || isAborted) {
       const timer = setTimeout(() => {
-        // Clear activeTask in parent so component unmounts
-        // This will be handled by App.js polling which already does this
-      }, 2000);
+        setIsOpen(false); // Collapse the component but keep it visible
+      }, 3000); // Collapse after 3 seconds
       
       return () => clearTimeout(timer);
     }
-  }, [isFailed, isAborted]);
+  }, [isCompleted, isFailed, isAborted]);
 
   // Simple: show component if there's an activeTask
   if (!activeTask) {
-    return null;
-  }
-  
-  // Hide after error (let App.js handle clearing activeTask)
-  if ((isFailed || isAborted) && taskStatus !== 'processing') {
     return null;
   }
 
@@ -159,7 +167,7 @@ export default function ActiveResearchProgress({ activeTask, getResearchConfig, 
                   <Button
                     onClick={(e) => {
                       e.stopPropagation(); // Don't toggle collapse when clicking button
-                      onViewReport && onViewReport();
+                      handleViewReport();
                     }}
                     size="sm"
                     className="bg-white hover:bg-gray-50 text-green-700 text-xs px-2.5 py-1 h-7 shadow-sm border border-green-200 flex items-center gap-1"
@@ -209,9 +217,9 @@ export default function ActiveResearchProgress({ activeTask, getResearchConfig, 
             {/* Current Status - Simple Text */}
             <div className="flex items-center gap-2 py-1">
               <div className="flex items-center gap-1">
-                <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse"></div>
-                <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                <div className="w-1 h-1 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                {!isCompleted && <div className="w-1 h-1 bg-blue-400 rounded-full animate-wave" style={{ animationDelay: '0ms', animationDuration: '1.2s' }}></div>}
+                {!isCompleted && <div className="w-1 h-1 bg-blue-400 rounded-full animate-wave" style={{ animationDelay: '200ms', animationDuration: '1.2s' }}></div>}
+                {!isCompleted && <div className="w-1 h-1 bg-blue-400 rounded-full animate-wave" style={{ animationDelay: '400ms', animationDuration: '1.2s' }}></div>}
               </div>
               <span className="text-sm text-gray-600 font-medium">{details}</span>
             </div>
@@ -223,8 +231,8 @@ export default function ActiveResearchProgress({ activeTask, getResearchConfig, 
                   className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all duration-700 ease-out relative"
                   style={{ width: `${progress}%` }}
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-                  <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white/40 to-transparent animate-pulse"></div>
+                  {!isCompleted && <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>}
+                  {!isCompleted && <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white/40 to-transparent animate-pulse"></div>}
                 </div>
               </div>
             </div>

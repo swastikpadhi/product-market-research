@@ -404,6 +404,7 @@ ANALYSIS FOCUS:
 
 REQUIREMENTS:
 - Pain points must include: issue, frequency (High/Medium/Low), impact (High/Medium/Low), description
+- Customer segments must include: name, demographics (age, income, location), characteristics (behavior, preferences), needs (specific to this product)
 - All insights must connect to THIS product idea, not generic sector insights
 """
 
@@ -418,6 +419,9 @@ CUSTOMER_INSIGHTS_SCHEMA = """
     "feature_requests": [],
     "customer_sentiment": {{"positive": [], "negative": [], "neutral": []}},
     "user_personas": [],
+    "customer_segments": [
+        {{"name": "", "demographics": "", "characteristics": "", "needs": []}}
+    ],
     "improvement_opportunities": [],
     "key_insights": [],
     "citations": [
@@ -479,6 +483,24 @@ SCHEMA REQUIREMENTS:
 - Pain points must include: issue, frequency (High/Medium/Low), impact (High/Medium/Low)
 - Product fit score must include percentage and brief explanation
 - All recommendations must be specific, actionable, and data-driven
+- Confidence level must be: "High" (5+ quality sources), "Medium" (3-4 sources), "Low" (1-2 sources or limited data)
+- Product fit score must be realistic: "90-100%" (proven market, clear demand), "70-89%" (growing market, strong signals), "50-69%" (emerging market, moderate demand), "30-49%" (niche market, limited demand), "10-29%" (experimental, high risk), "0-9%" (futuristic, very high risk)
+- Success probability must reflect market reality: "Very High" (90%+), "High" (70-89%), "Medium" (50-69%), "Low" (30-49%), "Very Low" (10-29%), "Extremely Low" (0-9%)
+
+PRODUCT-MARKET FIT EVALUATION CRITERIA:
+- Assess market readiness: Is the market mature enough for this product?
+- Evaluate demand signals: Are there clear customer pain points this solves?
+- Consider competitive landscape: How crowded is the market?
+- Analyze feasibility: Is the technology/regulatory environment ready?
+- Factor in timing: Is this the right time for this product?
+
+PMF SCORE GUIDELINES:
+- 90-100%: Proven market with clear demand (e.g., established SaaS tools)
+- 70-89%: Growing market with strong signals (e.g., AI productivity tools)
+- 50-69%: Emerging market with moderate demand (e.g., AR/VR applications)
+- 30-49%: Niche market with limited demand (e.g., specialized B2B tools)
+- 10-29%: Experimental with high risk (e.g., quantum computing apps)
+- 0-9%: Futuristic with very high risk (e.g., space tourism apps)
 
 REPORT STRUCTURE:
 1. Executive Summary - Key findings and recommendations
@@ -504,6 +526,9 @@ REPORT_GENERATOR_SCHEMA = """
         "growth_rate": "",
         "key_trends": [],
         "market_drivers": [],
+        "regulatory_landscape": "",
+        "technology_impact": "",
+        "key_insights": [],
         "future_outlook": ""
     }},
     "competitive_landscape": {{
@@ -539,7 +564,6 @@ REPORT_GENERATOR_SCHEMA = """
             "source_type": "market_analysis/competitor_analysis/customer_insights",
             "title": "Source title from URL",
             "url": "Source URL from data",
-            "accessed_date": "{today}",
             "key_insights": ["Insight 1", "Insight 2"]
         }}
     ]

@@ -6,7 +6,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.utils.api_tracker import SimpleTavilyClient
-from app.core.utils import extract_json_from_response
+from app.core.utils import extract_json_from_response, truncate_search_results
 from app.core.prompts import format_customer_insights_analysis_prompt
 from app.core.config import get_logger
 from app.services.progress_tracker import progress_tracker
@@ -16,7 +16,8 @@ logger = get_logger(__name__)
 class CustomerInsightsAgent:
 
     def __init__(self, openai_api_key: str, tavily_api_key: str):
-        self.llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key, temperature=0.1)
+        from app.core.ai_client import get_llm_client
+        self.llm = get_llm_client(openai_api_key)
         self.tavily_api_key = tavily_api_key
     
     async def analyze_customer_insights(
@@ -75,7 +76,7 @@ class CustomerInsightsAgent:
             search_depth = "advanced" if research_depth in ["standard", "comprehensive"] else "basic"
             
             # Checkpoint: Customer search started
-            await progress_tracker.complete_checkpoint(request_id, "customer_search_started")
+            progress_tracker.complete_checkpoint(request_id, "customer_search_started")
             
             search_response = tavily_client.search(
                 query=query,
@@ -89,7 +90,7 @@ class CustomerInsightsAgent:
             
             # Only record checkpoint if search was successful
             if search_results:
-                await progress_tracker.complete_checkpoint(request_id, "customer_search_completed")
+                progress_tracker.complete_checkpoint(request_id, "customer_search_completed")
             
             urls_to_extract, extract_depth = self._determine_extraction_params(
                 search_results, research_depth
@@ -104,7 +105,7 @@ class CustomerInsightsAgent:
                 
                 # Only record checkpoint if extraction was successful
                 if extracted_data:
-                    await progress_tracker.complete_checkpoint(request_id, "customer_extraction_completed")
+                    progress_tracker.complete_checkpoint(request_id, "customer_extraction_completed")
                 
                 for i, result in enumerate(search_results[:len(extracted_data)]):
                     if i < len(extracted_data):
@@ -144,7 +145,9 @@ class CustomerInsightsAgent:
             sector = context.get("sector", "")
             
             
-            customer_data = self._prepare_data_for_analysis(search_results, request_id)
+            # Truncate search results to fit within token limits
+            truncated_results = truncate_search_results(search_results)
+            customer_data = self._prepare_data_for_analysis(truncated_results, request_id)
             
             system_prompt, human_prompt = format_customer_insights_analysis_prompt(
                 product_idea, sector, json.dumps(customer_data, indent=2)
@@ -160,7 +163,7 @@ class CustomerInsightsAgent:
             
             # Only record checkpoint if analysis was successful
             if analysis and not analysis.get("error"):
-                await progress_tracker.complete_checkpoint(request_id, "customer_analysis_completed")
+                progress_tracker.complete_checkpoint(request_id, "customer_analysis_completed")
             
             return analysis
             

@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_logger, settings
-from app.services.service_manager import service_manager
+from app.services.application_manager import application_manager
 from app.routes.research_routes import router as research_router
 
 logger = get_logger(__name__)
@@ -18,14 +18,14 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown."""
     # Initialize all services
-    success = await service_manager.initialize_all_services()
+    success = await application_manager.initialize_all_services()
     if not success:
         raise RuntimeError("Failed to initialize services")
     
     yield
     
     # Cleanup services
-    await service_manager.cleanup_services()
+    await application_manager.cleanup_services()
 
 
 # FastAPI application
@@ -56,7 +56,7 @@ async def health_check():
         "service": "research_assistant_api",
         "version": "2.0.0",
         "timestamp": datetime.now().isoformat(),
-        "dependencies": service_manager.get_health_status()
+        "dependencies": application_manager.get_health_status()
     }
     
     # Determine overall status based on dependencies

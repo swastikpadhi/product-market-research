@@ -1,254 +1,201 @@
+"""
+Progress Tracker - Tracks research workflow checkpoints (Sync version for Celery workers)
+Uses Redis for all progress tracking to avoid async/sync conflicts
+"""
 import logging
-from typing import Dict, Any, Set, Optional
+from typing import Dict, Any, List, Optional
 from datetime import datetime
-from app.services.task_repository import task_repository
-from app.services.search_service import search_service
+import json
+
 from app.db.redis_manager import redis_manager
 from app.core.config import get_logger
+from app.core.constants import ALL_CHECKPOINTS, TOTAL_CHECKPOINTS
 
 logger = get_logger(__name__)
 
 class ProgressTracker:
-    ALL_CHECKPOINTS = {
-        "initialization_complete",
-        "queries_generated",
-        "market_search_started",
-        "market_search_completed", 
-        "market_extraction_completed",
-        "market_analysis_completed",
-        "competitor_search_started",
-        "competitor_search_completed",
-        "competitor_extraction_completed", 
-        "competitor_analysis_completed",
-        "customer_search_started",
-        "customer_search_completed",
-        "customer_extraction_completed",
-        "customer_analysis_completed",
-        "report_generation_started",
-        "report_generation_completed",
-        "finalization_complete"
-    }
+    """Tracks progress through research workflow checkpoints (Sync version for Celery workers)"""
     
-    UI_STAGES = {
-        (0, 10): "Initializing research workflow...",
-        (10, 20): "Preparing research queries...",
-        (20, 70): "Conducting market research...",
-        (70, 90): "Generating research report...",
-        (90, 100): "Finalizing research..."
-    }
+    ALL_CHECKPOINTS = ALL_CHECKPOINTS
+    TOTAL_CHECKPOINTS = TOTAL_CHECKPOINTS
     
     def __init__(self):
         self.redis = redis_manager
     
-    async def complete_checkpoint(self, request_id: str, checkpoint: str) -> bool:
-            try:
-                if checkpoint not in self.ALL_CHECKPOINTS:
-                    logger.warning(f"Unknown checkpoint: {checkpoint}")
-                    return False
-                
-                current_status = await self.get_status(request_id)
-                completed_checkpoints = set()
-                
-                if current_status and 'completed_checkpoints' in current_status:
-                    completed_checkpoints = set(current_status['completed_checkpoints'])
-                
-                completed_checkpoints.add(checkpoint)
-                
-                total_checkpoints = len(self.ALL_CHECKPOINTS)
-                completed_count = len(completed_checkpoints)
-                progress_percentage = int((completed_count / total_checkpoints) * 100)
-                
-                stage_description = self._get_stage_description(progress_percentage)
-                
-                status_data = {
-                    "request_id": request_id,
-                    "status": "processing",
-                    "current_step": checkpoint,
-                    "progress": progress_percentage,
-                    "details": stage_description,
-                    "completed_checkpoints": list(completed_checkpoints),
-                    "total_checkpoints": total_checkpoints,
-                    "last_updated": __import__('datetime').datetime.now().isoformat(),
-                    "research_depth": current_status.get("research_depth", "standard") if current_status else "standard",
-                    "product_idea": current_status.get("product_idea", "") if current_status else ""
-                }
-                
-                # Use single status update method
-                success = await self.update_status(request_id, status_data)
-                
-                if success:
-                    logger.info(f"[{request_id}] Checkpoint {completed_count}/{total_checkpoints}: {checkpoint}")
-                else:
-                    logger.error(f"[{request_id}] Failed checkpoint: {checkpoint}")
-                
-                return success
-                
-            except Exception as e:
-                logger.error(f"Failed to complete checkpoint {checkpoint} for {request_id}: {e}")
-                return False
-    
-    def _get_stage_description(self, progress_percentage: int) -> str:
-        for (min_progress, max_progress), description in self.UI_STAGES.items():
-            if min_progress <= progress_percentage < max_progress:
-                return description
-        
-        if progress_percentage >= 100:
-            return "Research complete!"
-        
-        return "Research in progress..."
-    
-    async def update_status(self, request_id: str, status_data: Dict[str, Any], max_retries: int = 3) -> bool:
-        """
-        Update status in both MongoDB and Redis atomically.
-        Single method that handles all status updates.
-        """
-        for attempt in range(max_retries):
-            try:
-                # Prepare update data for MongoDB
-                update_data = {
-                    "status": status_data.get("status", "processing"),
-                    "current_step": status_data.get("current_step", "unknown"),
-                    "progress": status_data.get("progress", 0),
-                    "details": status_data.get("details", "Research in progress..."),
-                    "completed_checkpoints": status_data.get("completed_checkpoints", []),
-                    "total_checkpoints": status_data.get("total_checkpoints", 17),
-                    "last_updated": status_data.get("last_updated", datetime.now().isoformat()),
-                    "updated_at": datetime.now().isoformat()
-                }
-                
-                # Add completion timestamp if task is completed
-                if status_data.get("status") in ["completed", "failed", "aborted"]:
-                    update_data["completed_at"] = datetime.now().isoformat()
-                
-                # Step 1: Update MongoDB (source of truth)
-                mongo_success = await task_repository.update(request_id, update_data)
-                if not mongo_success:
-                    logger.error(f"[{request_id}] MongoDB update failed on attempt {attempt + 1}")
-                    continue
-                
-                # Step 2: Update Redis cache (fast access)
-                redis_success = await self.set_status(request_id, status_data)
-                if not redis_success:
-                    logger.error(f"[{request_id}] Redis update failed on attempt {attempt + 1}")
-                    continue
-                
-                # Both succeeded
-                logger.debug(f"[{request_id}] Status update successful")
-                return True
-                
-            except Exception as e:
-                logger.error(f"[{request_id}] Status update failed on attempt {attempt + 1}: {e}")
-                if attempt == max_retries - 1:
-                    logger.error(f"[{request_id}] All retry attempts failed")
-                    return False
-                
-                # Wait before retry
-                import asyncio
-                await asyncio.sleep(0.1 * (attempt + 1))
-        
-        return False
-    
-    async def complete_task_atomic(
-        self, 
-        request_id: str, 
-        final_status: str = "completed",
-        result_data: Optional[Dict[str, Any]] = None
-    ) -> bool:
-        """
-        Atomically complete a task with final status and result data.
-        This is the critical method that must succeed before task completion.
-        """
+    def complete_checkpoint(self, request_id: str, checkpoint: str) -> bool:
+        """Complete a checkpoint and update progress (sync version using Redis only)"""
         try:
-            # Get current status to preserve some fields
-            current_status = await self.get_status(request_id)
+            if checkpoint not in self.ALL_CHECKPOINTS:
+                logger.warning(f"Unknown checkpoint: {checkpoint}")
+                return False
             
-            # Prepare final status data
-            final_status_data = {
-                "request_id": request_id,
-                "status": final_status,
-                "current_step": "finalization_complete",
-                "progress": 100,
-                "details": "Research complete!" if final_status == "completed" else f"Research {final_status}",
-                "completed_at": datetime.now().isoformat(),
-                "last_updated": datetime.now().isoformat(),
-                "research_depth": current_status.get("research_depth", "standard") if current_status else "standard",
-                "product_idea": current_status.get("product_idea", "") if current_status else "",
-                "completed_checkpoints": current_status.get("completed_checkpoints", []) if current_status else [],
-                "total_checkpoints": current_status.get("total_checkpoints", 17) if current_status else 17
-            }
+            redis_client = self.redis.get_sync_client()
+            if not redis_client:
+                logger.error(f"[{request_id}] Redis sync client not available")
+                return False
             
-            # Use single status update method
-            success = await self.update_status(request_id, final_status_data)
+            # Step 1: Add checkpoint to Redis set
+            checkpoints_key = f"checkpoints:{request_id}"
+            redis_client.sadd(checkpoints_key, checkpoint)
+            redis_client.expire(checkpoints_key, 3600)  # 1 hour TTL
             
-            if success and result_data:
-                # If we have result data, update it separately after status is committed
-                await task_repository.update(request_id, {"result": result_data})
-                
-                # Re-index task for search with updated data
-                try:
-                    updated_task = await task_repository.get_by_id(request_id)
-                    if updated_task:
-                        await search_service.index_task(updated_task)
-                except Exception as e:
-                    logger.warning(f"Failed to re-index completed task {request_id}: {e}")
+            # Step 2: Increment counter
+            counter_key = f"checkpoint_count:{request_id}"
+            completed_count = redis_client.incr(counter_key)
+            redis_client.expire(counter_key, 3600)
             
-            return success
+            total_checkpoints = self.TOTAL_CHECKPOINTS
+            logger.info(f"[{request_id}] Checkpoint {completed_count}/{total_checkpoints}: {checkpoint}")
+            
+            # Step 3: Update status with progress
+            self._update_status_sync(request_id, {
+                "completed_checkpoints": completed_count,
+                "progress": int((completed_count / total_checkpoints) * 100),
+                "current_step": "processing" if completed_count < total_checkpoints else "final_report_delivered",
+                "last_updated": datetime.now().isoformat()
+            })
+            
+            return True
             
         except Exception as e:
-            logger.error(f"[{request_id}] Task completion failed: {e}")
+            logger.error(f"[{request_id}] Failed to complete checkpoint {checkpoint}: {e}")
             return False
     
-    async def get_status(self, request_id: str) -> Optional[Dict[str, Any]]:
-        """Get status from Redis cache"""
+    def _update_status_sync(self, request_id: str, status_data: Dict[str, Any]) -> bool:
+        """Update status in Redis cache (sync version)"""
         try:
-            redis_client = self.redis.get_client()
+            redis_client = self.redis.get_sync_client()
+            if not redis_client:
+                return False
+            
+            cache_key = f"status:{request_id}"
+            
+            # Get existing status
+            existing_status = redis_client.get(cache_key)
+            if existing_status:
+                existing_data = json.loads(existing_status)
+                existing_data.update(status_data)
+                status_data = existing_data
+            
+            # Update cache (shorter TTL for cloud Redis)
+            redis_client.setex(cache_key, 300, json.dumps(status_data))  # 5 minutes
+            return True
+            
+        except Exception as e:
+            logger.error(f"[{request_id}] Failed to update status in cache: {e}")
+            return False
+    
+    def initialize_status(self, request_id: str, product_idea: str, research_depth: str) -> bool:
+        """Initialize status for a new task (sync version using Redis only)"""
+        try:
+            redis_client = self.redis.get_sync_client()
+            if not redis_client:
+                logger.error(f"[{request_id}] Redis sync client not available")
+                return False
+            
+            # Initialize checkpoint tracking
+            checkpoints_key = f"checkpoints:{request_id}"
+            counter_key = f"checkpoint_count:{request_id}"
+            
+            # Clear any existing data
+            redis_client.delete(checkpoints_key)
+            redis_client.delete(counter_key)
+            
+            # Initialize status
+            initial_status = {
+                "status": "processing",
+                "current_step": "initializing",
+                "progress": 0,
+                "completed_checkpoints": 0,
+                "last_updated": datetime.now().isoformat()
+            }
+            
+            cache_key = f"status:{request_id}"
+            redis_client.setex(cache_key, 300, json.dumps(initial_status))  # 5 minutes
+            
+            logger.info(f"[{request_id}] Initialized progress tracking")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[{request_id}] Failed to initialize status: {e}")
+            return False
+    
+    def complete_task_atomic(self, request_id: str, status: str, result: Dict[str, Any] = None) -> bool:
+        """Complete task atomically (sync version using Redis only)"""
+        try:
+            redis_client = self.redis.get_sync_client()
+            if not redis_client:
+                logger.error(f"[{request_id}] Redis sync client not available")
+                return False
+            
+            # Get completed checkpoints from Redis
+            checkpoints_key = f"checkpoints:{request_id}"
+            completed_checkpoints = list(redis_client.smembers(checkpoints_key))
+            completed_checkpoints = [cp.decode() if isinstance(cp, bytes) else cp for cp in completed_checkpoints]
+            
+            # Update final status in Redis
+            final_status = {
+                "status": status,
+                "progress": 100,
+                "current_step": "final_report_delivered",
+                "completed_checkpoints": completed_checkpoints,
+                "completed_at": datetime.now().isoformat(),
+                "last_updated": datetime.now().isoformat()
+            }
+            
+            if result:
+                final_status["result"] = result
+            
+            cache_key = f"status:{request_id}"
+            redis_client.setex(cache_key, 300, json.dumps(final_status))  # 5 minutes
+            
+            # Store final result separately for longer retention
+            if result:
+                result_key = f"result:{request_id}"
+                redis_client.setex(result_key, 3600, json.dumps(result))  # 1 hour
+            
+            logger.info(f"[{request_id}] Task completed with status: {status}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"[{request_id}] Failed to complete task atomically: {e}")
+            return False
+    
+    def get_task_status(self, request_id: str) -> Optional[Dict[str, Any]]:
+        """Get task status from Redis"""
+        try:
+            redis_client = self.redis.get_sync_client()
             if not redis_client:
                 return None
             
             cache_key = f"status:{request_id}"
-            cached_data = await redis_client.get(cache_key)
+            status_data = redis_client.get(cache_key)
             
-            if cached_data:
-                import json
-                return json.loads(cached_data)
-            
+            if status_data:
+                return json.loads(status_data)
             return None
             
         except Exception as e:
-            logger.error(f"Error getting status from cache for {request_id}: {e}")
+            logger.error(f"[{request_id}] Failed to get task status: {e}")
             return None
     
-    async def set_status(self, request_id: str, status_data: Dict[str, Any]) -> bool:
-        """Set status in Redis cache"""
+    def get_task_result(self, request_id: str) -> Optional[Dict[str, Any]]:
+        """Get task result from Redis"""
         try:
-            redis_client = self.redis.get_client()
+            redis_client = self.redis.get_sync_client()
             if not redis_client:
-                return False
+                return None
             
-            cache_key = f"status:{request_id}"
-            import json
-            await redis_client.setex(cache_key, 3600, json.dumps(status_data))
+            result_key = f"result:{request_id}"
+            result_data = redis_client.get(result_key)
             
-            return True
+            if result_data:
+                return json.loads(result_data)
+            return None
             
         except Exception as e:
-            logger.error(f"Error setting status in cache for {request_id}: {e}")
-            return False
-    
-    async def invalidate_status(self, request_id: str) -> bool:
-        """Invalidate status cache"""
-        try:
-            redis_client = self.redis.get_client()
-            if not redis_client:
-                return False
-            
-            cache_key = f"status:{request_id}"
-            await redis_client.delete(cache_key)
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error invalidating status cache for {request_id}: {e}")
-            return False
+            logger.error(f"[{request_id}] Failed to get task result: {e}")
+            return None
 
+# Global sync progress tracker instance
 progress_tracker = ProgressTracker()

@@ -68,11 +68,13 @@ export default function ResearchTaskCard({
   return (
     <div 
       key={task.request_id} 
-      className="bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-all duration-200 cursor-pointer fade-in"
+      className="bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-all duration-200 fade-in"
       style={{ animationDelay: `${idx * 30}ms`, animationFillMode: 'both' }}
-      onClick={handleCardClick}
     >
-      <div className="p-4">
+      <div 
+        className="p-4 cursor-pointer"
+        onClick={handleCardClick}
+      >
         <div className="flex items-center justify-between gap-4">
           {/* Left: Status Icon + Content */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -133,16 +135,19 @@ export default function ResearchTaskCard({
                   </button>
                 ) : (
                   <>
-                    <button
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        rerunTask(task);
-                      }}
-                      title="Re-run this validation"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
+                    {/* Show rerun button only for failed tasks */}
+                    {(task.status === 'failed' || task.status === 'error') && (
+                      <button
+                        className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          rerunTask(task);
+                        }}
+                        title="Re-run this failed task"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
                       className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       onClick={(e) => {
@@ -167,7 +172,7 @@ export default function ResearchTaskCard({
           isExpanded ? 'max-h-[5000px] opacity-100' : 'max-h-0 opacity-0'
         }`}
       >
-        <div className="border-t border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6">
+        <div className="border-t border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6 rounded-b-lg">
           {loadingReports[task.request_id] ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

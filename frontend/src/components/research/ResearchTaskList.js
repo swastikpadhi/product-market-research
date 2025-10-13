@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
-import { FileText, Clock, CheckCircle, AlertCircle, TrendingUp } from 'lucide-react';
+import { FileText, Clock, CheckCircle, AlertCircle, TrendingUp, Search } from 'lucide-react';
 import ResearchTaskCard from './ResearchTaskCard';
 import ResearchSearch from './ResearchSearch';
 import Pagination from '../ui/Pagination';
 import { getResearchConfig } from '../../constants/researchConfig';
+import { API_BASE } from '../../config/api';
 
 export default function ResearchTaskList({
   researchTasks,
@@ -29,22 +30,100 @@ export default function ResearchTaskList({
   abortTask,
   rerunTask,
   deleteTask,
-  setActiveTab
+  setActiveTab,
+  fetchSearches,
+  onSearchModeChange
 }) {
   const [searchResults, setSearchResults] = useState(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
+  const [searchPagination, setSearchPagination] = useState({
+    page: 1,
+    totalPages: 1,
+    total: 0
+  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [highlightedTaskId, setHighlightedTaskId] = useState(null);
+  const highlightedTaskRef = useRef(null);
 
-  const handleSearchResults = (results) => {
-    setSearchResults(results);
+  // Check for highlighted task ID from sessionStorage
+  useEffect(() => {
+    const taskId = sessionStorage.getItem('highlightTaskId');
+    if (taskId) {
+      setHighlightedTaskId(taskId);
+      sessionStorage.removeItem('highlightTaskId'); // Clear after reading
+      
+      // Scroll to the highlighted task after a short delay
+      setTimeout(() => {
+        if (highlightedTaskRef.current) {
+          highlightedTaskRef.current.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        }
+      }, 100);
+    }
+  }, []);
+
+  const handleSearchResults = (searchData, query) => {
+    setSearchResults(searchData.results || []);
+    setSearchPagination({
+      page: searchData.page || 1,
+      totalPages: searchData.total_pages || 1,
+      total: searchData.total || 0
+    });
+    setSearchQuery(query);
     setIsSearchMode(true);
+    onSearchModeChange?.(true);
   };
 
   const handleClearSearch = () => {
     setSearchResults(null);
+    setSearchPagination({ page: 1, totalPages: 1, total: 0 });
+    setSearchQuery('');
     setIsSearchMode(false);
+    onSearchModeChange?.(false);
   };
 
   const displayTasks = isSearchMode ? searchResults : researchTasks;
+  const displayPagination = isSearchMode ? searchPagination : { page: currentPage, totalPages, total: totalTasks };
+
+  const handleSearchPageChange = async (page) => {
+    if (!searchQuery.trim()) return;
+    
+    try {
+      let url = `${API_BASE}/search?query=${encodeURIComponent(searchQuery)}&limit=5&page=${page}`;
+      if (statusFilter && statusFilter !== 'all' && statusFilter !== '') {
+        url += `&status=${encodeURIComponent(statusFilter)}`;
+      }
+      
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        handleSearchResults(data, searchQuery);
+      }
+    } catch (err) {
+      console.error('Search pagination error:', err);
+    }
+  };
+
+  const handleSearchWithFilter = async (newStatusFilter) => {
+    if (!searchQuery.trim()) return;
+    
+    try {
+      let url = `${API_BASE}/search?query=${encodeURIComponent(searchQuery)}&limit=5&page=1`;
+      if (newStatusFilter && newStatusFilter !== 'all' && newStatusFilter !== '') {
+        url += `&status=${encodeURIComponent(newStatusFilter)}`;
+      }
+      
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        handleSearchResults(data, searchQuery);
+      }
+    } catch (err) {
+      console.error('Search filter error:', err);
+    }
+  };
 
   return (
     <Card className="border-0 shadow-2xl bg-white/90 backdrop-blur-sm rounded-3xl overflow-hidden">
@@ -58,10 +137,11 @@ export default function ResearchTaskList({
           </CardTitle>
           <div className="flex items-center gap-3">
             <div className="w-64">
-              <ResearchSearch 
-                onSearchResults={handleSearchResults}
-                onClearSearch={handleClearSearch}
-              />
+            <ResearchSearch 
+              onSearchResults={handleSearchResults}
+              onClearSearch={handleClearSearch}
+              statusFilter={statusFilter}
+            />
             </div>
             <div className="flex items-center gap-2">
               <Label htmlFor="status-filter" className="text-white font-semibold text-sm">Filter:</Label>
@@ -69,8 +149,14 @@ export default function ResearchTaskList({
                 id="status-filter"
                 value={statusFilter}
                 onChange={(e) => {
-                  setStatusFilter(e.target.value);
+                  const newFilter = e.target.value;
+                  setStatusFilter(newFilter);
                   setCurrentPage(1);
+                  
+                  // If in search mode, trigger a new search with the new filter
+                  if (isSearchMode && searchQuery.trim()) {
+                    handleSearchWithFilter(newFilter);
+                  }
                 }}
                 className="px-3 py-2 bg-white/20 backdrop-blur-sm border border-white/30 rounded-xl text-sm font-medium text-white placeholder-white/70 focus:bg-white/30 focus:ring-4 focus:ring-white/20 transition-all duration-200 w-32"
               >
@@ -101,7 +187,9 @@ export default function ResearchTaskList({
             <div className="text-center py-16">
               <div className="relative mb-8">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full blur-2xl opacity-20"></div>
-                {statusFilter === 'processing' ? (
+                {isSearchMode ? (
+                  <Search className="relative w-20 h-20 text-gray-400 mx-auto" />
+                ) : statusFilter === 'processing' ? (
                   <Clock className="relative w-20 h-20 text-gray-400 mx-auto" />
                 ) : statusFilter === 'completed' ? (
                   <CheckCircle className="relative w-20 h-20 text-gray-400 mx-auto" />
@@ -112,7 +200,9 @@ export default function ResearchTaskList({
                 )}
               </div>
               <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                {statusFilter === 'processing' 
+                {isSearchMode 
+                  ? 'No search results found'
+                  : statusFilter === 'processing' 
                   ? 'No tasks in progress' 
                   : statusFilter === 'completed'
                   ? 'No completed validations'
@@ -121,7 +211,14 @@ export default function ResearchTaskList({
                   : 'No product validations yet'}
               </h3>
               <p className="text-gray-500 mb-6">
-                {statusFilter === 'processing' 
+                {isSearchMode 
+                  ? (
+                    <>
+                      No tasks found for "<span className="font-medium text-gray-700">{searchQuery}</span>". 
+                      Try a different search term or check your spelling.
+                    </>
+                  )
+                  : statusFilter === 'processing' 
                   ? 'All validations have been completed or are idle' 
                   : statusFilter === 'completed'
                   ? 'Complete your first validation to see results here'
@@ -129,9 +226,12 @@ export default function ResearchTaskList({
                   ? 'No validations have failed - great job!'
                   : 'Validate your first product idea to see results here'}
               </p>
-              {!statusFilter && (
+              {!statusFilter && !isSearchMode && (
                 <Button 
-                  onClick={() => setActiveTab('new-research')}
+                  onClick={() => {
+                    setActiveTab('new-research');
+                    fetchSearches();
+                  }}
                   className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
                 >
                   Validate Product Idea
@@ -140,35 +240,49 @@ export default function ResearchTaskList({
             </div>
           ) : (
             <div className="space-y-3">
-              {displayTasks.map((task, idx) => (
-                <ResearchTaskCard
-                  key={task.request_id} 
-                  task={task}
-                  idx={idx}
-                  showFullReport={showFullReport}
-                  toggleFullReport={toggleFullReport}
-                  reportData={reportData}
-                  loadingReports={loadingReports}
-                  reportTabs={reportTabs}
-                  setReportTabs={setReportTabs}
-                  getStatusIcon={getStatusIcon}
-                  getResearchConfig={getResearchConfig}
-                  exportResults={exportResults}
-                  fetchReport={fetchReport}
-                  abortTask={abortTask}
-                  rerunTask={rerunTask}
-                  deleteTask={deleteTask}
-                />
-              ))}
+              {displayTasks.map((task, idx) => {
+                const isHighlighted = highlightedTaskId === task.request_id;
+                return (
+                  <div
+                    key={task.request_id}
+                    ref={isHighlighted ? highlightedTaskRef : null}
+                    className={isHighlighted ? 'ring-2 ring-blue-500 ring-opacity-50 rounded-lg' : ''}
+                  >
+                    <ResearchTaskCard
+                      task={task}
+                      idx={idx}
+                      showFullReport={showFullReport}
+                      toggleFullReport={(requestId) => {
+                        // Clear highlight when report is expanded
+                        if (highlightedTaskId === requestId) {
+                          setHighlightedTaskId(null);
+                        }
+                        toggleFullReport(requestId);
+                      }}
+                      reportData={reportData}
+                      loadingReports={loadingReports}
+                      reportTabs={reportTabs}
+                      setReportTabs={setReportTabs}
+                      getStatusIcon={getStatusIcon}
+                      getResearchConfig={getResearchConfig}
+                      exportResults={exportResults}
+                      fetchReport={fetchReport}
+                      abortTask={abortTask}
+                      rerunTask={rerunTask}
+                      deleteTask={deleteTask}
+                    />
+                  </div>
+                );
+              })}
               
-              {/* Pagination Controls - Only show when not in search mode */}
-              {!isSearchMode && (
+              {/* Pagination Controls */}
+              {displayPagination.totalPages > 1 && (
                 <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  totalTasks={totalTasks}
+                  currentPage={displayPagination.page}
+                  totalPages={displayPagination.totalPages}
+                  totalTasks={displayPagination.total}
                   pageSize={5}
-                onPageChange={setCurrentPage}
+                  onPageChange={isSearchMode ? handleSearchPageChange : setCurrentPage}
                 />
               )}
             </div>

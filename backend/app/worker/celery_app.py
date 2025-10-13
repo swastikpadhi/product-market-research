@@ -1,19 +1,14 @@
 from celery import Celery
-from app.core.config import settings
+from celery.signals import worker_ready
+from app.core.config import settings, get_logger
+
+logger = get_logger(__name__)
 
 # Convert async PostgreSQL URL to sync URL for Celery
 def get_sync_postgres_url():
     """Convert async PostgreSQL URL to sync URL for Celery"""
-    if settings.postgres_url.startswith('postgresql+asyncpg://'):
-        # Convert async URL to sync URL
-        sync_url = settings.postgres_url.replace('postgresql+asyncpg://', 'postgresql://')
-        
-        # Convert ssl=require to sslmode=require for psycopg2 compatibility
-        if 'ssl=require' in sync_url:
-            sync_url = sync_url.replace('ssl=require', 'sslmode=require')
-        
-        return sync_url
-    return settings.postgres_url
+    from app.db.postgres_manager import convert_async_to_sync_url
+    return convert_async_to_sync_url(settings.postgres_url)
 
 # Use centralized configuration for broker and results backend
 celery_app = Celery(
@@ -43,3 +38,51 @@ celery_app.conf.update(
     worker_hijack_root_logger=False,  # Don't hijack root logger
     worker_log_color=False,  # Disable colored output
 )
+
+@worker_ready.connect
+def initialize_services(sender=None, **kwargs):
+    """Initialize all services and database connections when Celery worker starts"""
+    try:
+        from app.db.database_factory import celery_context, database_factory
+        from app.services.credit_service import credit_service
+        
+        logger.info("🚀 Initializing Celery worker services...")
+        
+        # Initialize all database connections in Celery context
+        with celery_context():
+            # Initialize PostgreSQL
+            postgres_manager = database_factory.get_postgres_manager()
+            postgres_manager.connect_sync(settings.postgres_url)  # Actually connect with URL
+            if postgres_manager.is_connected:
+                logger.info("✅ PostgreSQL connected")
+            else:
+                logger.error("❌ PostgreSQL connection failed")
+                raise RuntimeError("PostgreSQL not connected")
+            
+            # Initialize MongoDB
+            mongodb_manager = database_factory.get_mongodb_manager()
+            mongodb_manager.connect_sync(settings.mongodb_url)  # Actually connect with URL
+            if mongodb_manager.is_connected:
+                logger.info("✅ MongoDB connected")
+            else:
+                logger.error("❌ MongoDB connection failed")
+                raise RuntimeError("MongoDB not connected")
+            
+            # Initialize Redis
+            redis_manager = database_factory.get_redis_manager()
+            redis_manager.connect_sync(settings.redis_url)  # Actually connect with URL
+            if redis_manager.is_connected:
+                logger.info("✅ Redis connected")
+            else:
+                logger.error("❌ Redis connection failed")
+                raise RuntimeError("Redis not connected")
+            
+            # Initialize credit service
+            credit_service._ensure_initialized()
+            logger.info("✅ Credit service initialized")
+            
+        logger.info("🎉 All Celery services initialized successfully!")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize Celery services: {e}")
+        raise  # Re-raise to prevent Celery from starting with broken services

@@ -18,14 +18,11 @@ class ResearchStatus(BaseModel):
     status: str
     current_step: str
     progress: int
-    details: str
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     research_depth: str
     product_idea: str
-    completed_checkpoints: list = []
-    total_checkpoints: int = 17
-    last_updated: Optional[str] = None
+    completed_checkpoints: int = 0
 
 class ResearchResult(BaseModel):
     request_id: str

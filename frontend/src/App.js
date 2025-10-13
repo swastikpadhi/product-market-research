@@ -19,6 +19,7 @@ export default function ProductMarketFitResearch() {
     researchDepth,
     setResearchDepth,
     isSubmitting,
+    setIsSubmitting,
     error,
     activeTab,
     setActiveTab,
@@ -34,6 +35,8 @@ export default function ProductMarketFitResearch() {
     setCurrentPage,
     statusFilter,
     setStatusFilter,
+    isSearchMode,
+    setIsSearchMode,
     isLoading,
     showFullReport,
     reportData,
@@ -46,20 +49,42 @@ export default function ProductMarketFitResearch() {
     abortTask,
     rerunTask,
     fetchReport,
-    toggleFullReport
+    toggleFullReport,
+    collapseAllReports
   } = useResearchTasks(appState);
 
   const { searchesRemaining: searchesRemainingData, isLoading: isLoadingSearchesData, fetchSearches } = useSearchesRemaining();
 
   // Load tasks when component mounts or when dependencies change
   useEffect(() => {
-    loadTasks();
-  }, [loadTasks, currentPage, statusFilter]);
+    if (!isSearchMode) {
+      loadTasks();
+    }
+  }, [loadTasks, currentPage, statusFilter, isSearchMode]);
+
+  // Collapse all reports when page changes
+  useEffect(() => {
+    collapseAllReports();
+  }, [currentPage, collapseAllReports]);
+
+  // Refresh tasks when switching to research-tasks tab on mount
+  useEffect(() => {
+    if (activeTab === 'research-tasks') {
+      loadTasks();
+    }
+  }, [activeTab, loadTasks]);
 
   // Load searches remaining when component mounts
   useEffect(() => {
     fetchSearches();
   }, [fetchSearches]);
+
+  // Clear isSubmitting when active task appears
+  useEffect(() => {
+    if (activeTask && isSubmitting) {
+      setIsSubmitting(false);
+    }
+  }, [activeTask, isSubmitting, setIsSubmitting]);
 
   // Poll activeTask status for real-time updates
   useEffect(() => {
@@ -70,8 +95,8 @@ export default function ProductMarketFitResearch() {
         const response = await fetch(`${API_BASE}/${activeTask.request_id}/status`);
         if (response.ok) {
           const statusData = await response.json();
-            setActiveTask(prev => ({
-              ...prev,
+          setActiveTask(prev => ({
+            ...prev,
             ...statusData,
             workflow_status: statusData
           }));
@@ -81,26 +106,54 @@ export default function ProductMarketFitResearch() {
       }
     };
 
+    // Check if task is completed/failed/aborted - stop polling
+    const isTaskFinished = activeTask?.status === 'completed' || 
+                          activeTask?.status === 'failed' || 
+                          activeTask?.status === 'error' || 
+                          activeTask?.status === 'aborted' ||
+                          (activeTask?.workflow_status?.progress >= 100);
+
+    if (isTaskFinished) {
+      return; // Don't start polling for finished tasks
+    }
+
     // Poll every 5 seconds
     const interval = setInterval(pollStatus, 5000);
     
-    // Clear activeTask when completed/failed
-    if (activeTask?.status === 'completed' || activeTask?.status === 'failed' || activeTask?.status === 'aborted') {
-      const timer = setTimeout(() => {
-        setActiveTask(null);
-      }, 3000);
-    return () => {
-        clearInterval(interval);
-        clearTimeout(timer);
-      };
-    }
-
     return () => clearInterval(interval);
-  }, [activeTask?.request_id, activeTask?.status, setActiveTask]);
+  }, [activeTask?.request_id, activeTask?.status, activeTask?.workflow_status?.progress, setActiveTask]);
+
+  // Refresh searches remaining when a task completes
+  useEffect(() => {
+    const isTaskFinished = activeTask?.status === 'completed' || 
+                          activeTask?.status === 'failed' || 
+                          activeTask?.status === 'error' || 
+                          activeTask?.status === 'aborted' ||
+                          (activeTask?.workflow_status?.progress >= 100);
+
+    if (isTaskFinished && activeTask?.request_id) {
+      // Task completed - refresh searches remaining to reflect updated credits
+      console.log('Task completed, refreshing searches remaining...');
+      fetchSearches();
+    }
+  }, [activeTask?.status, activeTask?.workflow_status?.progress, activeTask?.request_id, fetchSearches]);
 
   const handleTabChange = (value) => {
     setActiveTab(value);
     localStorage.setItem('productMarketFitActiveTab', value);
+    
+    // Collapse all expanded reports when switching tabs
+    collapseAllReports();
+    
+    // Refresh task list when switching to "My Research" tab
+    if (value === 'research-tasks') {
+      loadTasks();
+    }
+    
+    // Refresh searches remaining when switching to "Validate Idea" tab
+    if (value === 'new-research') {
+      fetchSearches();
+    }
   };
 
   const getStatusIcon = (status) => {
@@ -167,19 +220,26 @@ export default function ProductMarketFitResearch() {
               setResearchDepth={setResearchDepth}
               searchesRemaining={searchesRemainingData}
               isLoadingSearches={isLoadingSearchesData}
-              isSubmitting={isSubmitting}
+              isSubmitting={isSubmitting || (activeTask && activeTask.status === 'processing')}
               error={error}
               onSubmit={submitProductResearch}
               getResearchConfig={getResearchConfig}
+              activeTab={activeTab}
             />
 
             <ActiveResearchProgress
               activeTask={activeTask}
               getResearchConfig={getResearchConfig}
-              onViewReport={() => {
+              onViewReport={(requestId) => {
                 setActiveTab('research-tasks');
                 setActiveTask(null);
+                // Pass the request_id to highlight the specific task
+                if (requestId) {
+                  // Store the request_id to highlight in the research tasks list
+                  sessionStorage.setItem('highlightTaskId', requestId);
+                }
               }}
+              setActiveTask={setActiveTask}
             />
           </TabsContent>
 
@@ -207,6 +267,8 @@ export default function ProductMarketFitResearch() {
                         rerunTask={rerunTask}
                         deleteTask={deleteTask}
               setActiveTab={setActiveTab}
+              fetchSearches={fetchSearches}
+              onSearchModeChange={setIsSearchMode}
             />
           </TabsContent>
         </Tabs>
